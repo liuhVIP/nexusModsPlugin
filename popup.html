@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Nexus Mods 直链</title>
+  <meta charset="UTF-8">
+  <style>
+    body { 
+      width: 500px; 
+      padding: 20px; 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background-color: #f5f5f5;
+      margin: 0;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .title {
+      font-size: 28px;
+      font-weight: 600;
+      color: #1a73e8;
+      margin: 0;
+      line-height: 1.2;
+    }
+    .online-count {
+      padding: 6px 16px;
+      background: #e8f0fe;
+      border-radius: 8px;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      height: 38px;
+    }
+    .author, .version {
+      font-size: 14px;
+      color: #666;
+      margin: 5px 0;
+    }
+    .update-link {
+      display: inline-block;
+      margin-top: 10px;
+      color: #1a73e8;
+      text-decoration: none;
+      font-size: 14px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      background-color: #e8f0fe;
+      transition: all 0.3s ease;
+    }
+    .update-link:hover {
+      background-color: #1a73e8;
+      color: white;
+    }
+    #status {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-weight: 500;
+    }
+    .status-loading {
+      background-color: #e3f2fd;
+      color: #1976d2;
+    }
+    .status-success {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+    }
+    .status-error {
+      background-color: #ffebee;
+      color: #d32f2f;
+    }
+    .links-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .links-table th {
+      background-color: #f8f9fa;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #333;
+      border-bottom: 2px solid #e0e0e0;
+      position: relative;
+    }
+    .links-table td {
+      padding: 12px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    .link-cell {
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .link-cell:hover {
+      position: relative;
+    }
+    .link-cell:hover::after {
+      content: attr(data-full-url);
+      position: absolute;
+      left: 0;
+      top: 100%;
+      background: #333;
+      color: white;
+      padding: 8px;
+      border-radius: 4px;
+      z-index: 1000;
+      white-space: normal;
+      max-width: 300px;
+      word-break: break-all;
+    }
+    .action-button {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      margin: 0 4px 0 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+    .action-button img {
+      width: 18px;
+      height: 18px;
+      display: block;
+    }
+    .copy-button {
+      background-color: #e3f2fd;
+    }
+    .copy-button:hover {
+      background-color: #1976d2;
+    }
+    .copy-button:hover img {
+      filter: brightness(0) invert(1);
+    }
+    .download-button {
+      background-color: #e8f5e9;
+    }
+    .download-button:hover {
+      background-color: #2e7d32;
+    }
+    .download-button:hover img {
+      filter: brightness(0) invert(1);
+    }
+    .copy-all-button {
+      background-color: #fff3e0;
+      color: #f57c00;
+      padding: 0 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      font-weight: 500;
+      height: 32px;
+      line-height: 32px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin: 0;
+      border: none;
+      vertical-align: middle;
+    }
+    .copy-all-button:hover {
+      background-color: #f57c00;
+      color: white;
+    }
+    .copy-all-button:hover img {
+      filter: brightness(0) invert(1);
+    }
+    .copy-all-button img {
+      width: 16px;
+      height: 16px;
+    }
+    .auth-status {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .auth-status.success {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+    }
+    .auth-status.error {
+      background-color: #ffebee;
+      color: #d32f2f;
+    }
+    .auth-status-icon {
+      width: 20px;
+      height: 20px;
+    }
+    
+    /* 加载动画样式 */
+    .loading-spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #f3f3f3;
+      border-top: 2px solid #3498db;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    /* 推荐工具样式 */
+    .tools-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 10px;
+    }
+    
+    .tool-item {
+      display: flex;
+      align-items: center;
+      padding: 12px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      text-decoration: none;
+      color: inherit;
+      transition: all 0.3s ease;
+    }
+    
+    .tool-item:hover {
+      background: #e8f0fe;
+      transform: translateY(-2px);
+    }
+    
+    .tool-icon {
+      font-size: 24px;
+      margin-right: 12px;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .tool-info {
+      flex: 1;
+    }
+    
+    .tool-name {
+      font-weight: 600;
+      color: #1a73e8;
+      margin-bottom: 4px;
+    }
+    
+    .tool-desc {
+      font-size: 13px;
+      color: #666;
+    }
+
+    /* 折叠面板样式 */
+    .tools-container {
+      margin-top: 20px;
+    }
+
+    .tools-container details {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .tools-container summary {
+      padding: 12px 20px;
+      cursor: pointer;
+      user-select: none;
+      font-weight: 500;
+      color: #1a73e8;
+    }
+
+    .tools-container summary:hover {
+      background: #f8f9fa;
+    }
+
+    .tools-container summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .tools-container summary::before {
+      content: '▶';
+      margin-right: 8px;
+      font-size: 12px;
+      transition: transform 0.2s;
+    }
+
+    .tools-container details[open] summary::before {
+      transform: rotate(90deg);
+    }
+    
+    /* 开关样式 */
+    .settings-container {
+      background: white;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .settings-title {
+      font-weight: 600;
+      color: #1a73e8;
+      margin-bottom: 12px;
+    }
+    
+    .settings-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    
+    .settings-item:last-child {
+      border-bottom: none;
+    }
+    
+    .settings-label {
+      font-size: 14px;
+    }
+    
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+    
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 24px;
+    }
+    
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .slider {
+      background-color: #1a73e8;
+    }
+    
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+
+    .table-header-container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+    }
+    
+    .table-title {
+      font-weight: 600;
+      color: #333;
+    }
+    
+    #copyAllBtnContainer {
+      margin: 0;
+    }
+
+    /* 下载链接加载效果 */
+    .download-loading {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 8px;
+      background: #f8f9fa;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .download-loading .loading-dots {
+      display: inline-flex;
+      gap: 2px;
+    }
+
+    .download-loading .dot {
+      width: 4px;
+      height: 4px;
+      background: #666;
+      border-radius: 50%;
+      animation: dot-flashing 1s infinite linear alternate;
+    }
+
+    .download-loading .dot:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .download-loading .dot:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes dot-flashing {
+      0% {
+        opacity: 0.2;
+        transform: scale(0.8);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .download-status {
+      font-size: 12px;
+      margin-left: 8px;
+    }
+
+    .download-status.success {
+      color: #2e7d32;
+    }
+
+    .download-status.error {
+      color: #d32f2f;
+    }
+
+    /* 赞助板块样式 */
+    .sponsor-container {
+      padding: 15px;
+    }
+    
+    .sponsor-images {
+      display: flex;
+      justify-content: space-around;
+      gap: 10px;
+    }
+    
+    .sponsor-img {
+      width: 120px;
+      height: 120px;
+      object-fit: cover;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .sponsor-img:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    /* 图片放大效果 */
+    .fullscreen-image {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.9);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+    }
+
+    .fullscreen-image img {
+      max-width: 90%;
+      max-height: 90%;
+      object-fit: contain;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="title">N网Mod省事助手(免费)</h1>
+      <div class="online-count">
+        <span>在线人数：</span>
+        <span id="onlineCount">加载中...</span>
+      </div>
+    </div>
+    <p class="author">求一键三连，谢谢</p>
+    <p class="author">作者：b站up改洺_</p>
+    <p class="version">版本：v1.0.0</p>
+    <a href="https://space.bilibili.com/18718286?spm_id_from=333.1007.0.0" class="update-link" target="_blank">获取更新</a>
+  </div>
+    <!-- 添加URL监听控制开关 -->
+    <div class="settings-container">
+      <details>
+        <summary>URL监听设置</summary>
+        <div style="padding: 10px 0;">
+          <div class="settings-item">
+            <div class="settings-label">监听标准模组页面</div>
+            <label class="switch">
+              <input type="checkbox" id="standardUrlSwitch" checked>
+              <span class="slider"></span>
+            </label>
+          </div>
+          <div class="settings-item">
+            <div class="settings-label">监听游戏列表页面</div>
+            <label class="switch">
+              <input type="checkbox" id="gameListUrlSwitch">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <!-- 添加高级设置 -->
+    <div class="settings-container">
+      <div class="settings-title">高级设置</div>
+      <details>
+        <summary>快捷键设置</summary>
+        <div style="padding: 10px 0;">
+          <div class="settings-item">
+            <div class="settings-label">开始/暂停解析</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <kbd style="
+                  background: #f8f9fa;
+                  border: 1px solid #dee2e6;
+                  border-radius: 4px;
+                  padding: 4px 8px;
+                  font-size: 12px;
+                  font-family: monospace;
+                ">Ctrl + X</kbd>
+                <span style="font-size: 12px; color: #666;">Mac: Command + X</span>
+              </div>
+              <div style="font-size: 12px; color: #666;">
+                修改方法：<br>
+                1. 打开 Chrome 扩展管理页面 (chrome://extensions/shortcuts)<br>
+                2. 找到"Nexus Mods 直链工具"<br>
+              </div>
+            </div>
+          </div>
+        </div>
+      </details>
+      <details>
+        <summary>游戏列表页面请求控制</summary>
+        <div style="padding: 10px 0;">
+          <div class="settings-item">
+            <div class="settings-label">最大并发请求数</div>
+            <input type="number" id="maxConcurrentRequests" min="1" max="5" value="1" style="width: 60px; text-align: center;">
+          </div>
+          <div class="settings-item">
+            <div class="settings-label">请求间隔时间(毫秒)</div>
+            <input type="number" id="requestDelay" min="500" max="5000" step="100" value="2500" style="width: 80px; text-align: center;">
+          </div>
+          <div style="font-size: 12px; color: #666; margin-top: 10px;">
+            提示：较低的并发数和较长的间隔时间可以减少被网站拦截的风险，但会增加获取链接的总时间。
+          </div>
+          <div class="settings-item" style="margin-top: 15px; flex-direction: column; align-items: center; border-bottom: none;">
+            <button id="clearCacheBtn" style="
+              padding: 8px 32px;
+              background-color: #dc3545;
+              color: white;
+              border: none;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 14px;
+              margin-bottom: 8px;
+              display: block;
+              margin-left: auto;
+              margin-right: auto;
+            ">清除直链缓存</button>
+            <div style="font-size: 12px; color: #666; margin-top: 0; text-align: center;">
+              清除后需要重新获取直链，建议在遇到问题时使用。
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>
+
+  <div id="authStatus" class="auth-status">
+    <div class="loading-spinner"></div>
+    <span>正在检查授权状态...</span>
+  </div>
+  
+  <div id="status" class="status-loading">请访问模组详情页...</div>
+  <div id="directLink">
+    <table class="links-table">
+      <thead>
+        <tr>
+          <th>
+            <div class="table-header-container">
+              <span class="table-title">下载链接</span>
+              <span id="copyAllBtnContainer"></span>
+            </div>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="linksTableBody">
+        <!-- 示例加载状态 -->
+        <tr>
+          <td>
+            <div class="download-loading">
+              <span>正在获取下载链接</span>
+              <div class="loading-dots">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+              </div>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <!-- 添加推荐工具部分 -->
+  <div class="tools-container">
+    <details>
+      <summary>推荐工具</summary>
+      <div class="tools-list">
+        <a href="https://steampp.net/" class="tool-item" target="_blank">
+          <div class="tool-icon">🚀</div>
+          <div class="tool-info">
+            <div class="tool-name">Steam++</div>
+            <div class="tool-desc">Steam 工具箱，提供多种实用功能</div>
+          </div>
+        </a>
+        <a href="https://pan.quark.cn/s/7317e30a17b9" class="tool-item" target="_blank">
+          <div class="tool-icon">⬇️</div>
+          <div class="tool-info">
+            <div class="tool-name">IDM下载器</div>
+            <div class="tool-desc">强大的多线程下载工具</div>
+          </div>
+        </a>
+        <button id="openAIChatBtn" class="tool-item" style="border: none; background: none; width: 100%; text-align: left; cursor: pointer;">
+          <div class="tool-icon">🤖</div>
+          <div class="tool-info">
+            <div class="tool-name">AI助手</div>
+            <div class="tool-desc">智能问答助手，随时为您解答问题</div>
+          </div>
+        </button>
+      </div>
+    </details>
+  </div>
+
+  <!-- 添加赞助板块 -->
+  <div class="tools-container">
+    <details>
+      <summary>赞助支持</summary>
+      <div class="sponsor-container">
+        <p style="text-align: center; margin-bottom: 15px; color: #666; font-size: 14px;">解放双手，告别等待！小小心意，让插件更好用。</p>
+        <div class="sponsor-images">
+          <img src="static/zfb.jpg" alt="支付宝" class="sponsor-img" data-action="show-full-image">
+          <img src="static/wx.png" alt="微信" class="sponsor-img" data-action="show-full-image">
+          <img src="static/gm.png" alt="赞赏码" class="sponsor-img" data-action="show-full-image">
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <div class="fullscreen-image">
+    <img src="" alt="全屏图片">
+  </div>
+
+  <script src="lib/marked.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html> 

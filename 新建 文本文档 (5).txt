@@ -1,0 +1,3480 @@
+现在我们要完成ai部分的代码，之前的是用Python写的，最后是开一个新的板块来写，避免和其他代码冲突，
+最基本的聊天功能：
+用户输入框： 允许用户输入文本消息。
+AI响应显示区域： 显示AI生成的消息。
+流式响应（Streamed Response）： AI的消息内容不是一次性全部显示，而是逐字或逐句地逐步显示，模拟“打字机”效果。
+打字机效果： 视觉上模拟文字逐个字符出现，增加交互感。
+使用 Marked 解析 Markdown： AI的响应内容可以包含Markdown格式（例如，粗体、斜体、代码块、列表等），并由Marked库进行渲染，使其更具可读性。
+可复制聊天内容： 允许用户选择并复制聊天记录中的文本内容。
+聊天历史记录：
+显示聊天历史： 用户可以看到当前对话的所有消息（用户和AI）。
+聊天携带聊天历史（上下文）： 在每次AI请求时，将之前的部分或全部对话历史作为上下文发送给AI模型，以便AI能理解并响应与之前对话相关的问题。
+新建聊天： 提供一个按钮或选项，让用户可以开始一个新的空白对话，清除当前的聊天历史。
+用户体验与界面：
+
+加载/思考状态指示： 在AI生成响应时，显示一个加载动画或“AI正在思考”的提示，告知用户AI正在处理请求。
+滚动到底部： 当有新消息生成时，聊天区域自动滚动到最新消息的底部。
+消息时间戳： 每条消息旁边显示发送/接收的时间，方便追踪对话进度。
+用户头像和AI头像： 为用户和AI的消息分别显示不同的头像，使界面更清晰。
+响应操作按钮：
+复制按钮： 在每条AI响应旁边添加一个独立的复制按钮，方便快速复制单条消息。
+快捷键支持： 例如，按Enter发送消息，按Shift+Enter换行。
+响应速度显示： （可选）显示AI生成此条响应所花费的时间。
+停止生成按钮： 在AI正在生成响应时，提供一个按钮让用户可以提前停止生成。
+现代化的样式
+
+
+
+def deepseekR1(sid, messages):
+    global current_ai_response
+    # 确保开始新的API调用时重置AI回复收集变量
+    current_ai_response = ""
+
+    # 清除停止请求标志
+    if sid in stop_requested:
+        stop_requested[sid] = False
+
+    # DeepSeek API配置
+    url = "https://alphachain.net.cn/openapi/v1/chat/completions"
+    unique_id = str(uuid.uuid4().hex)
+    payload = json.dumps({
+        "userId": -1,
+        "uniqueId": unique_id,
+        # "model": "Pro/deepseek-ai/DeepSeek-R1",
+        "model": "bot-20250218182311-kq7vj",
+        "token": None,
+        "temperature": 0.6,
+        "top_p": 0.95,
+        "presence_penalty": 0,
+        "frequency_penalty": 0,
+        "messages": messages,
+        "stream": True,
+        "max_tokens": 8192
+    })
+
+    try:
+        session = requests.Session()
+        session.trust_env = False
+        response = session.post(url, headers=headers, data=payload, stream=True, timeout=8)
+
+        for line in response.iter_lines():
+            # 检查是否应该停止流
+            if sid in active_streams and active_streams[sid]['stop']:
+                break
+            if line:
+                try:
+                    decoded_line = line.decode('utf-8').strip()
+                    if decoded_line.startswith('data:'):
+                        json_str = decoded_line[5:].strip()
+                        if json_str in ['', '[DONE]']:
+                            if json_str == '[DONE]':
+                                send_stream_message(is_done=True)
+                            continue
+
+                        data = json.loads(json_str)
+                        if 'choices' in data and len(data['choices']) > 0:
+                            delta = data['choices'][0].get('delta', {})
+
+                            reasoning_chunk = delta.get('reasoning_content', '')
+                            if reasoning_chunk:
+                                send_stream_message("reasoning", reasoning_chunk)
+
+                            content_chunk = delta.get('content', '')
+                            if content_chunk:
+                                send_stream_message("content", content_chunk)
+                except Exception as e:
+                    send_system_message(f"服务器暂无响应，请重新尝试！{str(e)}")
+                    break
+
+    except requests.exceptions.RequestException as e:
+        send_system_message(f"服务器暂无响应，请重新尝试！{str(e)}")
+    except Exception as e:
+        send_system_message(f"服务器暂无响应，请重新尝试！{str(e)}")
+    finally:
+        # 清理流控制
+        if sid in active_streams:
+            del active_streams[sid]
+        # 清除停止请求标志
+        if sid in stop_requested:
+            stop_requested[sid] = False
+        send_stream_message(is_done=True)
+		
+		
+		
+		
+		
+		
+		
+		
+// 公告栏相关函数
+function showbulletin(content) {
+    const bulletinBar = document.getElementById('bulletinBar');
+    const bulletinContent = document.getElementById('bulletinContent');
+    
+    if (bulletinBar && bulletinContent) {
+        // 正则表达式匹配URL模式
+        const urlPattern = /(https?:\/\/[^\s]+)/g;
+        
+        // 将URL替换为HTML链接
+        const formattedContent = content.replace(urlPattern, url => {
+            return `<a href="${url}" style="color: #0097ff";rel="noopener noreferrer">${url}</a>`;
+        });
+        
+        // 设置内容（包含HTML标签）
+        bulletinContent.innerHTML = formattedContent;
+        
+        // 为所有链接添加点击事件
+        bulletinContent.querySelectorAll('a').forEach(link => {
+            const url = link.getAttribute('href');
+            link.removeAttribute('target'); // 移除target属性
+            link.onclick = function(e) {
+                e.preventDefault(); // 阻止默认打开行为
+                openModPage(url); // 使用小窗口打开
+                return false;
+            };
+        });
+        
+        bulletinBar.style.display = 'flex';  // 直接使用flex显示
+        bulletinBar.style.opacity = '1';
+        bulletinBar.style.transform = 'none';
+    }
+}
+
+function closebulletin() {
+    const bulletinBar = document.getElementById('bulletinBar');
+    if (bulletinBar) {
+        bulletinBar.style.display = 'none';
+    }
+}
+
+// 获取公告内容
+async function fetchbulletin() {
+    try {
+        const response = await fetch('/api/get-bulletin');
+        const data = await response.json();
+        
+        if (data.success && data.bulletin) {
+            showbulletin(data.bulletin);
+        } else {
+            // 如果没有公告内容，也显示一个默认公告
+            showbulletin('欢迎使用N网AI助手，支持三千多款游戏模组的下载和安装指导！');
+        }
+    } catch (error) {
+        console.error('获取公告失败:', error);
+        // 发生错误时显示默认公告
+        showbulletin('欢迎使用N网AI助手，支持三千多款游戏模组的下载和安装指导！');
+    }
+}
+
+// 隐藏空状态显示
+function hideEmptyState() {
+    const messageArea = document.getElementById('messageArea');
+    if (!messageArea) {
+        console.warn('找不到消息区域(#messageArea)');
+        return;
+    }
+    
+    const emptyState = messageArea.querySelector('.empty-message-state');
+    if (emptyState) {
+        emptyState.style.display = 'none';
+    }
+}
+
+// 处理空状态显示
+function handleEmptyState() {
+    try {
+        const messageArea = document.getElementById('messageArea');
+        if (!messageArea) {
+            console.warn('找不到消息区域(#messageArea)');
+            return;
+        }
+        
+        // 检查空状态元素是否存在
+        let emptyState = messageArea.querySelector('.empty-message-state');
+        
+        // 如果空状态元素不存在，创建一个
+        if (!emptyState) {
+            console.warn('找不到空状态元素(.empty-message-state)，正在创建');
+            emptyState = document.createElement('div');
+            emptyState.className = 'empty-message-state';
+            emptyState.style.display = 'none';
+            messageArea.appendChild(emptyState);
+        }
+        
+        // 检查是否有实际的消息内容（用户消息或AI消息）
+        const hasMessages = messageArea.querySelector('.message:not(.empty-message-state)') !== null;
+        
+        if (hasMessages) {
+            hideEmptyState();
+        } else {
+            emptyState.style.display = 'block';
+            
+            // 如果空状态内容为空，填充默认内容
+            if (emptyState.innerHTML.trim() === '') {
+                emptyState.innerHTML = generateEmptyStateHTML();
+                
+                // 初始化空状态中的头像
+                const avatar = emptyState.querySelector('.avatar.ai');
+                if (avatar) {
+                    initAvatarUpload(avatar);
+                }
+                
+                // 加载头像缓存
+                loadAvatarFromCache();
+            }
+        }
+    } catch (error) {
+        console.error('处理空状态时发生错误:', error);
+    }
+}
+
+// 初始化Socket.IO连接
+const socket = io({
+    reconnection: true,
+    reconnectionAttempts: 5,
+    reconnectionDelay: 1000
+});
+
+// 游戏选择相关变量
+let currentPage = 1;
+let isLoading = false;
+let totalPages = 1;
+let pageSize = 20;
+let hasMoreGames = true;
+let currentSearchQuery = '';
+let selectedGame = null;
+
+// 历史游戏记录管理
+const HISTORY_GAMES_KEY = 'historyGames';
+const MAX_HISTORY_GAMES = 10;
+
+// 全局变量用于存储当前消息的状态
+let currentMessageDiv = null;
+let currentThinkingDiv = null;
+let currentAiContent = null;
+let markdownBuffer = '';
+let isProcessing = false;  // 添加处理状态标志
+let thinkingStartTime = null; // 添加思考开始时间
+let userHasScrolled = false; // 添加用户手动滚动标志
+
+// 添加收藏相关的常量
+const FAVORITE_GAMES_KEY = 'favoriteGames';
+
+// 全局加载效果控制器
+const LoadingController = {
+    loadingContainer: null,
+    loadingText: null,
+
+    // 初始化加载效果
+    init() {
+        // 创建加载容器
+        this.loadingContainer = document.createElement('div');
+        this.loadingContainer.className = 'loading-container';
+        
+        // 创建加载动画
+        const spinner = document.createElement('div');
+        spinner.className = 'loading-spinner';
+        
+        // 创建加载文本
+        this.loadingText = document.createElement('div');
+        this.loadingText.className = 'loading-text';
+        
+        // 组装加载效果
+        this.loadingContainer.appendChild(spinner);
+        this.loadingContainer.appendChild(this.loadingText);
+        
+        // 添加到输入框容器
+        const userInput = document.getElementById('userInput');
+        if (userInput) {
+            userInput.parentElement.appendChild(this.loadingContainer);
+        }
+    },
+
+    // 显示加载效果
+    show(text = '处理中...') {
+        if (!this.loadingContainer) {
+            this.init();
+        }
+        this.loadingText.textContent = text;
+        this.loadingContainer.classList.add('active');
+        // 禁用输入框
+        const userInput = document.getElementById('userInput');
+        if (userInput) {
+            userInput.disabled = true;
+        }
+    },
+
+    // 隐藏加载效果
+    hide() {
+        if (this.loadingContainer) {
+            this.loadingContainer.classList.remove('active');
+            // 启用输入框
+            const userInput = document.getElementById('userInput');
+            if (userInput) {
+                userInput.disabled = false;
+            }
+        }
+    },
+
+    // 更新加载文本
+    updateText(text) {
+        if (this.loadingText) {
+            this.loadingText.textContent = text;
+        }
+    }
+};
+// 全局通知管理器
+const NotificationManager = {
+    // 通知类型
+    types: {
+        SUCCESS: 'success',
+        ERROR: 'error',
+        WARNING: 'warning',
+        INFO: 'info'
+    },
+
+    // 通知配置
+    config: {
+        duration: 5000, // 显示时间（毫秒）增加为5秒
+        position: 'top-right', // 位置
+        maxNotifications: 3, // 最大同时显示数量
+        spacing: 15 // 通知之间的间距
+    },
+
+    // 当前显示的通知列表
+    activeNotifications: [],
+
+    // 初始化
+    init() {
+        // 创建通知容器
+        this.container = document.createElement('div');
+        this.container.className = 'notification-container';
+        document.body.appendChild(this.container);
+    },
+
+    // 创建通知元素
+    createNotificationElement(message, type = this.types.INFO) {
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        
+        // 根据类型设置图标
+        let icon = '';
+        switch (type) {
+            case this.types.SUCCESS:
+                icon = 'fa-check-circle';
+                break;
+            case this.types.ERROR:
+                icon = 'fa-exclamation-circle';
+                break;
+            case this.types.WARNING:
+                icon = 'fa-exclamation-triangle';
+                break;
+            case this.types.INFO:
+                icon = 'fa-info-circle';
+                break;
+        }
+
+        notification.innerHTML = `
+            <i class="fas ${icon}"></i>
+            <span class="notification-message">${message}</span>
+            <button class="notification-close">
+                <i class="fas fa-times"></i>
+            </button>
+        `;
+
+        // 添加关闭按钮事件
+        const closeBtn = notification.querySelector('.notification-close');
+        closeBtn.addEventListener('click', () => this.removeNotification(notification));
+
+        return notification;
+    },
+
+    // 显示通知
+    show(message, type = this.types.INFO) {
+        // 确保容器存在
+        if (!this.container) {
+            this.init();
+        }
+
+        // 创建新通知
+        const notification = this.createNotificationElement(message, type);
+        
+        // 添加到容器
+        this.container.appendChild(notification);
+        
+        // 添加到活动通知列表
+        this.activeNotifications.push(notification);
+        
+        // 更新通知位置
+        this.updatePositions();
+        
+        // 设置自动关闭
+        setTimeout(() => {
+            // 如果通知仍然存在（可能已被手动关闭）
+            if (this.activeNotifications.includes(notification)) {
+                notification.style.animation = 'notification-fade-out 0.3s forwards';
+                setTimeout(() => this.removeNotification(notification), 300);
+            }
+        }, this.config.duration);
+    },
+
+    // 移除通知
+    removeNotification(notification) {
+        notification.classList.add('fade-out');
+        notification.style.animation = 'notification-fade-out 0.3s forwards';
+        
+        setTimeout(() => {
+            notification.remove();
+            this.activeNotifications = this.activeNotifications.filter(n => n !== notification);
+            this.updatePositions();
+        }, 300);
+    },
+
+    // 更新所有通知的位置
+    updatePositions() {
+        this.activeNotifications.forEach((notification, index) => {
+            const top = index * (notification.offsetHeight + this.config.spacing);
+            notification.style.top = `${top}px`;
+        });
+    },
+
+    // 快捷方法
+    success(message) {
+        this.show(message, this.types.SUCCESS);
+    },
+
+    error(message) {
+        this.show(message, this.types.ERROR);
+    },
+
+    warning(message) {
+        this.show(message, this.types.WARNING);
+    },
+
+    info(message) {
+        this.show(message, this.types.INFO);
+    }
+};
+// 连接成功事件
+socket.on('connect', () => {
+    console.log('Connected to server');
+});
+
+// 接收消息事件
+socket.on('message', (data) => {
+    disableChatHistorySwitch();
+    // 检查是否需要创建新的消息容器
+    const isNewBubble = data.createNewBubble === true;
+    const isDeepThinking = localStorage.getItem('isDeepThinking') === 'true';
+    
+    if (isNewBubble || !currentAiContent) {
+        // 如果需要创建新气泡或当前没有消息容器，创建一个新的
+        // 重置当前消息状态
+        markdownBuffer = '';
+        currentThinkingDiv = null;
+        currentAiContent = null;
+        createNewMessageContainers();
+    }
+
+    try {
+        if (data.error) {
+            if (currentAiContent) {
+                currentAiContent.textContent = '错误: ' + data.error;
+            }
+            isProcessing = false;
+            // 更新思考区域，但不折叠
+            if (isDeepThinking && currentThinkingDiv) {
+                updateThinkingHeader('思考失败');
+            }
+            LoadingController.hide();  // 出错时隐藏加载效果
+            return;
+        }
+
+        // 检查是否是结束标记
+        if (data.data === '[DONE]') {
+            console.log('流结束');
+            document.querySelector('.stop-button').classList.add('hidden');
+            document.querySelector('.stop-button').classList.remove('visible');
+
+            // 在流结束时渲染完整的消息
+            if (currentAiContent && markdownBuffer) {
+                renderMessageContent(markdownBuffer, currentAiContent);
+            }
+
+            isProcessing = false;
+            LoadingController.hide();  // 完成时隐藏加载效果
+            // 等待两秒后执行
+            setTimeout(() => {
+                // 恢复聊天历史切换功能
+                enableChatHistorySwitch();
+            }, 1000);
+            return;
+        }
+
+        // 解析消息数据
+        const messageData = JSON.parse(data.data);
+
+        if (messageData.type === 'reasoning' && isDeepThinking) {
+            if (currentThinkingDiv) {
+                // 确保思考区域可见
+                currentThinkingDiv.style.display = 'block';
+
+                // 更新思考内容
+                const thinkingContent = currentThinkingDiv.querySelector('.thinking-content');
+                if (thinkingContent) {
+                    // 检查是否是思考结束标记
+                    if (messageData.content === '。\n') {
+                        // 计算思考用时
+                        const thinkingEndTime = new Date();
+                        const thinkingDuration = (thinkingEndTime - thinkingStartTime) / 1000; // 转换为秒
+
+                        // 更新思考标题
+                        updateThinkingHeader(`已思考 (用时 ${thinkingDuration.toFixed(1)} 秒)`);
+
+                        // 保持展开状态，不自动折叠
+                        currentThinkingDiv.classList.add('collapsed');
+                        currentThinkingDiv.classList.remove('expanded');
+                        const thinkingToggle = currentThinkingDiv.querySelector('.thinking-toggle');
+                        if (thinkingToggle) {
+                            thinkingToggle.classList.add('collapsed');
+                        }
+                    } else {
+                        thinkingContent.textContent = (thinkingContent.textContent || '') + messageData.content;
+
+                        // 添加自动滚动到底部的功能
+                        if (currentThinkingDiv.classList.contains('expanded')) {
+                            thinkingContent.scrollTop = thinkingContent.scrollHeight;
+                        }
+                    }
+                }
+            }
+        } else if (messageData.type === 'content') {
+            // 使用marked解析Markdown
+            markdownBuffer = (markdownBuffer || '') + messageData.content;
+
+            // 使用防抖优化渲染性能
+            clearTimeout(window.renderTimeout);
+            window.renderTimeout = setTimeout(() => {
+                if (currentAiContent) {
+                    renderMessageContent(markdownBuffer, currentAiContent);
+                }
+            }, 100);
+        }
+
+        const messageArea = document.getElementById('messageArea');
+        // 只有当用户没有手动滚动时，才自动滚动到底部
+        if (!userHasScrolled) {
+            messageArea.scrollTop = messageArea.scrollHeight;
+        }
+    } catch (error) {
+        console.error('处理消息时出错:', error);
+        if (currentAiContent) {
+            currentAiContent.textContent = '错误: ' + error.message;
+        }
+        // 折叠思考区域而不是隐藏
+        if (isDeepThinking && currentThinkingDiv) {
+            updateThinkingHeader('思考出错');
+            currentThinkingDiv.classList.add('collapsed');
+            currentThinkingDiv.classList.remove('expanded');
+            const thinkingToggle = currentThinkingDiv.querySelector('.thinking-toggle');
+            if (thinkingToggle) {
+                thinkingToggle.classList.add('collapsed');
+            }
+        }
+        isProcessing = false;
+        LoadingController.hide();  // 出错时隐藏加载效果
+    }
+});
+
+// 断开连接事件
+socket.on('disconnect', () => {
+    console.log('Disconnected from server');
+    isProcessing = false;
+});
+
+// 格式化时间戳
+function formatTimestamp(timestamp) {
+    if (!timestamp) {
+        return '刚刚';
+    }
+
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diff = now - date;
+
+    // 如果是今天的消息
+    if (date.toDateString() === now.toDateString()) {
+        return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // 如果是昨天的消息
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) {
+        return '昨天 ' + date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // 其他日期显示完整日期时间
+    return date.toLocaleString('zh-CN', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+// 创建新的消息容器
+function createNewMessageContainers() {
+    const messageArea = document.getElementById('messageArea');
+    const isDeepThinking = localStorage.getItem('isDeepThinking') === 'true';
+
+    // 只在深度思考模式开启时创建思考区域
+    if (isDeepThinking) {
+        // 创建AI思考区域
+        currentThinkingDiv = document.createElement('div');
+        currentThinkingDiv.className = 'thinking-area expanded';
+        // 生成唯一ID
+        const thinkingId = 'thinking-' + Date.now();
+        currentThinkingDiv.setAttribute('data-thinking-id', thinkingId);
+        // 默认显示思考区域
+        currentThinkingDiv.style.display = 'block';
+
+        // 创建思考区域的头部
+        const thinkingHeader = document.createElement('div');
+        thinkingHeader.className = 'thinking-header';
+
+        // 创建思考标题
+        const thinkingTitle = document.createElement('div');
+        thinkingTitle.className = 'thinking-title';
+
+        // 添加思考中的指示器
+        const thinkingIndicator = document.createElement('div');
+        thinkingIndicator.className = 'thinking-indicator';
+        thinkingIndicator.innerHTML = '思考中 <div class="thinking-dot"></div><div class="thinking-dot"></div><div class="thinking-dot"></div>';
+        thinkingTitle.appendChild(thinkingIndicator);
+
+        // 添加折叠/展开按钮
+        const thinkingToggle = document.createElement('div');
+        thinkingToggle.className = 'thinking-toggle';
+        thinkingToggle.innerHTML = '<i class="fas fa-chevron-down"></i>';
+
+        // 添加点击事件处理
+        thinkingHeader.addEventListener('click', function () {
+            const targetThinkingDiv = document.querySelector(`[data-thinking-id="${thinkingId}"]`);
+            if (!targetThinkingDiv) return;
+
+            if (targetThinkingDiv.classList.contains('collapsed')) {
+                targetThinkingDiv.classList.remove('collapsed');
+                targetThinkingDiv.classList.add('expanded');
+                thinkingToggle.classList.remove('collapsed');
+
+                // 展开后自动滚动到底部
+                const thinkingContent = targetThinkingDiv.querySelector('.thinking-content');
+                if (thinkingContent) {
+                    setTimeout(() => {
+                        thinkingContent.scrollTop = thinkingContent.scrollHeight;
+                    }, 100);
+                }
+            } else {
+                targetThinkingDiv.classList.add('collapsed');
+                targetThinkingDiv.classList.remove('expanded');
+                thinkingToggle.classList.add('collapsed');
+            }
+        });
+
+        // 组装头部
+        thinkingHeader.appendChild(thinkingTitle);
+        thinkingHeader.appendChild(thinkingToggle);
+        currentThinkingDiv.appendChild(thinkingHeader);
+
+        // 创建思考内容区域
+        const thinkingContent = document.createElement('div');
+        thinkingContent.className = 'thinking-content';
+        currentThinkingDiv.appendChild(thinkingContent);
+
+        // 使用MutationObserver替代DOMNodeInserted
+        const observer = new MutationObserver(function() {
+            if (currentThinkingDiv.classList.contains('expanded')) {
+                thinkingContent.scrollTop = thinkingContent.scrollHeight;
+            }
+        });
+        
+        observer.observe(thinkingContent, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+
+        messageArea.appendChild(currentThinkingDiv);
+
+        // 记录思考开始时间
+        thinkingStartTime = new Date();
+    } else {
+        // 如果不是深度思考模式，重置相关变量
+        currentThinkingDiv = null;
+        thinkingStartTime = null;
+    }
+
+    // 创建AI消息区域
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'message';
+
+    // 添加时间戳
+    const timestamp = document.createElement('div');
+    timestamp.className = 'message-timestamp';
+    timestamp.textContent = formatTimestamp(null);
+    aiDiv.appendChild(timestamp);
+
+    // 添加AI头像
+    const aiAvatar = document.createElement('div');
+    aiAvatar.className = 'avatar ai';
+    
+    // 检查是否有自定义头像
+    const cachedAiAvatar = localStorage.getItem('aiAvatar');
+    if (cachedAiAvatar) {
+        aiAvatar.classList.add('custom-avatar');
+        aiAvatar.classList.remove('default-avatar');
+    } else {
+        aiAvatar.classList.remove('custom-avatar');
+        aiAvatar.classList.add('default-avatar');
+    }
+    
+    // 初始化头像点击事件
+    initAvatarUpload(aiAvatar);
+    
+    aiDiv.appendChild(aiAvatar);
+
+    // 创建AI回复区域
+    currentAiContent = document.createElement('div');
+    currentAiContent.className = 'ai-message';
+    aiDiv.appendChild(currentAiContent);
+    messageArea.appendChild(aiDiv);
+}
+
+async function sendMessage() {
+    
+    const input = document.getElementById('userInput');
+    const messageArea = document.getElementById('messageArea');
+    const message = input.value.trim();
+
+    if (!message || isProcessing) return;
+
+    // 显示停止按钮
+    document.querySelector('.stop-button').classList.remove('hidden');
+    document.querySelector('.stop-button').classList.add('visible');
+    
+    isProcessing = true;
+
+    // 获取按钮状态
+    const isDeepThinking = localStorage.getItem('isDeepThinking') === 'true';
+    const isWebSearch = localStorage.getItem('isWebSearch') === 'true';
+
+    // 创建用户消息区域
+    const userDiv = document.createElement('div');
+    userDiv.className = 'message user-container';
+
+    // 添加时间戳
+    const timestamp = document.createElement('div');
+    timestamp.className = 'message-timestamp';
+    timestamp.textContent = formatTimestamp(null);
+    userDiv.appendChild(timestamp);
+
+    // 添加用户头像
+    const userAvatar = document.createElement('div');
+    userAvatar.className = 'avatar user';
+    
+    // 检查是否有自定义用户头像
+    const cachedUserAvatar = localStorage.getItem('userAvatar');
+    if (cachedUserAvatar) {
+        userAvatar.classList.add('custom-avatar');
+        userAvatar.classList.remove('default-avatar');
+    } else {
+        userAvatar.classList.remove('custom-avatar');
+        userAvatar.classList.add('default-avatar');
+        userAvatar.textContent = 'U';
+    }
+    
+    // 初始化头像点击事件
+    initAvatarUpload(userAvatar);
+    
+    userDiv.appendChild(userAvatar);
+
+    // 创建用户消息内容
+    const userContent = document.createElement('div');
+    userContent.className = 'user-message';
+    userContent.textContent = message;
+    userDiv.appendChild(userContent);
+    messageArea.appendChild(userDiv);
+
+    // 清空输入框
+    input.value = '';
+
+    // 重置输入框高度
+    input.style.height = 'auto';
+
+    // 发送新消息时重置滚动标志并滚动到底部
+    userHasScrolled = false;
+    messageArea.scrollTop = messageArea.scrollHeight;
+
+    // 重置markdown缓冲区和消息容器
+    markdownBuffer = '';
+    currentThinkingDiv = null;
+    currentAiContent = null;
+
+    // 生成一个随机id值
+    sid = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    // 缓存到本地
+    localStorage.setItem('sid', sid);
+    // 隐藏空状态显示
+    hideEmptyState()
+    // 发送消息到服务器，包含按钮状态
+    socket.emit('send_message', { 
+        message: message, 
+        sid: sid,
+        isDeepThinking: isDeepThinking,
+        isWebSearch: isWebSearch
+    });
+    // 在消息发送完成后重新加载历史列表，并保持禁用状态
+    await loadChatHistoryList();
+}
+
+function stopReceiving() {
+    console.log('停止接收消息');
+    // 从本地缓存中获取sid
+    const sid = localStorage.getItem('sid');
+    if (!sid) {
+        console.error('sid不存在,无法暂停');
+        return;
+    }
+    socket.emit('stop_stream', { sid: sid });
+    LoadingController.hide();  // 停止时隐藏加载效果
+
+    // 立即更新UI状态
+    document.querySelector('.stop-button').classList.add('hidden');
+    document.querySelector('.stop-button').classList.remove('visible');
+
+    // 确保客户端状态也被重置
+    isProcessing = false;
+
+    // 折叠思考区域而不是隐藏，并显示思考用时
+    const isDeepThinking = localStorage.getItem('isDeepThinking') === 'true';
+    if (isDeepThinking && currentThinkingDiv) {
+        const thinkingContent = currentThinkingDiv.querySelector('.thinking-content');
+        if (thinkingContent && thinkingContent.textContent.trim()) {
+            // 计算思考用时
+            const thinkingEndTime = new Date();
+            const thinkingDuration = (thinkingEndTime - thinkingStartTime) / 1000; // 转换为秒
+
+            // 更新思考标题
+            updateThinkingHeader(`已停止思考 (用时 ${thinkingDuration.toFixed(1)} 秒)`);
+
+            currentThinkingDiv.classList.add('collapsed');
+            currentThinkingDiv.classList.remove('expanded');
+            const thinkingToggle = currentThinkingDiv.querySelector('.thinking-toggle');
+            if (thinkingToggle) {
+                thinkingToggle.classList.add('collapsed');
+            }
+        }
+    }
+
+    // 添加一个提示，表明流已被用户停止
+    if (currentAiContent) {
+        // 先渲染当前的markdown内容
+        if (markdownBuffer && markdownBuffer.trim()) {
+            renderMessageContent(markdownBuffer, currentAiContent);
+        }
+        
+        // 创建停止消息元素
+        const stopMessage = document.createElement('div');
+        stopMessage.className = 'stream-stopped-message';
+        stopMessage.textContent = '（消息已被用户停止）';
+        
+        // 添加到AI消息的末尾
+        currentAiContent.appendChild(stopMessage);
+    }
+    
+    // 恢复聊天历史切换功能
+    enableChatHistorySwitch();
+}
+
+// 添加回车发送功能
+document.getElementById('userInput').addEventListener('keypress', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+    }
+});
+
+// 添加textarea自动调整高度功能
+const textarea = document.getElementById('userInput');
+textarea.addEventListener('input', function () {
+    this.style.height = 'auto';
+    const newHeight = Math.min(this.scrollHeight, 150);
+    this.style.height = newHeight + 'px';
+});
+
+// 修改头像加载函数
+function loadAvatarFromCache() {
+    // 先尝试从本地缓存获取AI头像
+    const cachedAiAvatar = localStorage.getItem('aiAvatar');
+    if (cachedAiAvatar) {
+        // 如果有缓存直接使用
+        updateAvatarDisplay('ai', cachedAiAvatar);
+    } else {
+        // 没有缓存则从后端获取
+        fetch('/api/get-avatar/ai')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.avatar) {
+                    // 保存到本地缓存
+                    localStorage.setItem('aiAvatar', data.avatar);
+                    updateAvatarDisplay('ai', data.avatar);
+                }
+            })
+            .catch(error => console.error('获取AI头像失败:', error));
+    }
+
+    // 先尝试从本地缓存获取用户头像
+    const cachedUserAvatar = localStorage.getItem('userAvatar');
+    if (cachedUserAvatar) {
+        // 如果有缓存直接使用
+        updateAvatarDisplay('user', cachedUserAvatar);
+    } else {
+        // 没有缓存则从后端获取
+        fetch('/api/get-avatar/user')
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.avatar) {
+                    // 保存到本地缓存
+                    localStorage.setItem('userAvatar', data.avatar);
+                    updateAvatarDisplay('user', data.avatar);
+                } else {
+                    // 如果没有自定义头像,显示默认的'U'
+                    const userAvatars = document.querySelectorAll('.avatar.user');
+                    userAvatars.forEach(avatar => {
+                        avatar.classList.remove('custom-avatar');
+                        avatar.classList.add('default-avatar');
+                        avatar.textContent = 'U';
+                    });
+                }
+            })
+            .catch(error => console.error('获取用户头像失败:', error));
+    }
+}
+
+// 添加头像显示更新函数
+function updateAvatarDisplay(type, avatarData) {
+    const avatars = document.querySelectorAll(`.avatar.${type}`);
+    const cssVar = type === 'ai' ? '--custom-avatar-url' : '--custom-user-avatar-url';
+    
+    document.documentElement.style.setProperty(cssVar, `url(${avatarData})`);
+    avatars.forEach(avatar => {
+        avatar.classList.add('custom-avatar');
+        avatar.classList.remove('default-avatar');
+        if (type === 'user') {
+            avatar.textContent = '';
+        }
+    });
+}
+
+// 修改头像上传处理函数
+function initAvatarUpload(avatar) {
+    if (!avatar) return;
+    
+    avatar.style.cursor = 'pointer';
+    avatar.title = '点击更换头像';
+    
+    avatar.addEventListener('click', function() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.style.display = 'none';
+        
+        fileInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                if (file.size > 2 * 1024 * 1024) {
+                    NotificationManager.error('图片大小不能超过2MB');
+                    return;
+                }
+                
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const base64Image = e.target.result;
+                    const avatarType = avatar.classList.contains('ai') ? 'ai' : 'user';
+                    
+                    // 调用后端API保存头像
+                    fetch('/api/save-avatar', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            avatar: base64Image,
+                            type: avatarType
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            // 保存到本地缓存
+                            localStorage.setItem(`${avatarType}Avatar`, base64Image);
+                            // 更新头像显示
+                            updateAvatarDisplay(avatarType, base64Image);
+                            NotificationManager.success('头像更新成功');
+                        } else {
+                            NotificationManager.error('头像更新失败: ' + data.error);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('保存头像失败:', error);
+                        NotificationManager.error('保存头像失败');
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        fileInput.click();
+    });
+}
+
+// 修改获取聊天历史记录的函数
+async function fetchChatHistory() {
+    try {
+        const response = await fetch('/api/chat-history');
+        const data = await response.json();
+        
+        if (data.success) {
+            // 清空消息区域
+            const messageArea = document.getElementById('messageArea');
+            messageArea.innerHTML = '';
+            
+            // 如果有指定的会话文件，加载该会话的内容
+            if (data.current_file) {
+                const chatResponse = await fetch(`/api/load-chat?filename=${data.current_file}`);
+                const chatData = await chatResponse.json();
+                
+                if (chatData.success) {
+                    // 渲染历史消息
+                    chatData.messages.forEach(message => {
+                        if (message.role === 'user') {
+                            // 创建用户消息
+                            const userDiv = document.createElement('div');
+                            userDiv.className = 'message user-container';
+
+                            // 添加时间戳
+                            const timestamp = document.createElement('div');
+                            timestamp.className = 'message-timestamp';
+                            timestamp.textContent = formatTimestamp(message.timestamp);
+                            userDiv.appendChild(timestamp);
+
+                            const userAvatar = document.createElement('div');
+                            userAvatar.className = 'avatar user';
+                            
+                            // 检查是否有自定义用户头像
+                            const cachedUserAvatar = localStorage.getItem('userAvatar');
+                            if (cachedUserAvatar) {
+                                userAvatar.classList.add('custom-avatar');
+                                userAvatar.classList.remove('default-avatar');
+                            } else {
+                                userAvatar.classList.remove('custom-avatar');
+                                userAvatar.classList.add('default-avatar');
+                                userAvatar.textContent = 'U';
+                            }
+                            
+                            // 初始化头像点击事件
+                            initAvatarUpload(userAvatar);
+                            
+                            userDiv.appendChild(userAvatar);
+
+                            const userContent = document.createElement('div');
+                            userContent.className = 'user-message';
+                            userContent.textContent = message.content;
+                            userDiv.appendChild(userContent);
+
+                            messageArea.appendChild(userDiv);
+                        } else if (message.role === 'assistant') {
+                            // 创建AI消息
+                            const aiDiv = document.createElement('div');
+                            aiDiv.className = 'message';
+
+                            // 添加时间戳
+                            const timestamp = document.createElement('div');
+                            timestamp.className = 'message-timestamp';
+                            timestamp.textContent = formatTimestamp(message.timestamp);
+                            aiDiv.appendChild(timestamp);
+
+                            const aiAvatar = document.createElement('div');
+                            aiAvatar.className = 'avatar ai';
+                            aiDiv.appendChild(aiAvatar);
+
+                            const aiContent = document.createElement('div');
+                            aiContent.className = 'ai-message';
+                            renderMessageContent(message.content, aiContent);
+
+                            aiDiv.appendChild(aiContent);
+                            messageArea.appendChild(aiDiv);
+                        }
+                    });
+
+                    // 滚动到底部
+                    messageArea.scrollTop = messageArea.scrollHeight;
+                    
+                    // 在历史消息加载完成后重新应用头像
+                    loadAvatarFromCache();
+                    
+                    // 为所有AI头像添加点击事件
+                    const aiAvatars = document.querySelectorAll('.avatar.ai');
+                    aiAvatars.forEach(avatar => {
+                        initAvatarUpload(avatar);
+                    });
+                }
+            }
+            
+            // 加载聊天历史列表
+            await loadChatHistoryList();
+        } else {
+            console.error('获取聊天历史失败:', data.error);
+        }
+    } catch (error) {
+        console.error('获取聊天历史出错:', error);
+    }
+}
+
+// 初始化页面
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化加载效果
+    LoadingController.init();
+    
+    // 初始化通知管理器
+    NotificationManager.init();
+    
+    // 获取公告内容
+    fetchbulletin();
+    
+    // 初始化空状态
+    handleEmptyState();
+    
+    // 获取聊天历史记录
+    fetchChatHistory();
+
+    // 初始化textarea高度
+    const textarea = document.getElementById('userInput');
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
+
+    // 聚焦到输入框
+    textarea.focus();
+
+    // 从本地存储获取按钮状态
+    const isDeepThinking = localStorage.getItem('isDeepThinking') !== 'false';  // 修改默认值逻辑
+    const isWebSearch = localStorage.getItem('isWebSearch') === 'true';
+
+    // 添加深度思考按钮点击事件
+    const deepThinkingBtn = document.querySelector('.deep-thinking-text');
+    if (deepThinkingBtn) {
+        // 设置初始状态 - 默认开启
+        if (isDeepThinking) {
+            deepThinkingBtn.classList.add('active');
+            localStorage.setItem('isDeepThinking', 'true');  // 确保存储状态
+        }
+        
+        deepThinkingBtn.addEventListener('click', function() {
+            const currentState = this.classList.contains('active');
+            if (currentState) {
+                this.classList.remove('active');
+                localStorage.setItem('isDeepThinking', 'false');
+            } else {
+                this.classList.add('active');
+                localStorage.setItem('isDeepThinking', 'true');
+            }
+        });
+    }
+
+    // 添加联网搜索按钮点击事件
+    const webSearchBtn = document.querySelector('.web-search-button');
+    if (webSearchBtn) {
+        // 设置初始状态
+        if (isWebSearch) {
+            webSearchBtn.classList.add('active');
+        }
+        
+        webSearchBtn.addEventListener('click', function() {
+            // 待开发
+            NotificationManager.warning('还没做好这个功能，可赞助、👍+🪙🪙+转发为up提速！！！');
+            return
+            const currentState = this.classList.contains('active');
+            if (currentState) {
+                this.classList.remove('active');
+                localStorage.setItem('isWebSearch', 'false');
+            } else {
+                this.classList.add('active');
+                localStorage.setItem('isWebSearch', 'true');
+            }
+        });
+    }
+
+    // 添加遮罩层到body
+    if (!document.querySelector('.overlay')) {
+        document.body.insertAdjacentHTML('beforeend', '<div class="overlay"></div>');
+        const overlay = document.querySelector('.overlay');
+        // 点击遮罩层关闭弹出框
+        overlay.addEventListener('click', closeHotModulesPopover);
+    }
+
+    // 初始化热门模组按钮点击事件
+    const hotModulesBtn = document.getElementById('hotModulesBtn');
+    if (hotModulesBtn) {
+        hotModulesBtn.addEventListener('click', getHotModules);
+    }
+
+    // 为所有头像添加点击事件
+    const aiAvatars = document.querySelectorAll('.avatar.ai');
+    aiAvatars.forEach(avatar => {
+        initAvatarUpload(avatar);
+    });
+
+    // 加载聊天历史列表
+    loadChatHistoryList();
+
+    // 初始获取在线人数
+    updateOnlineCount();
+    
+    // 每60秒更新一次在线人数
+    setInterval(updateOnlineCount, 60000);
+    
+    // 检查初始化状态
+    checkInitialization();
+});
+
+// 确保页面完全加载后也处理一次头像
+window.addEventListener('load', function() {
+    // 延迟一小段时间后再次处理头像，确保所有元素都已经完全渲染
+    setTimeout(loadAvatarFromCache, 100);
+});
+
+// 辅助函数：更新思考标题
+function updateThinkingHeader(text) {
+    if (currentThinkingDiv) {
+        const thinkingIndicator = currentThinkingDiv.querySelector('.thinking-indicator');
+        if (thinkingIndicator) {
+            thinkingIndicator.innerHTML = text;
+        }
+    }
+}
+
+// 添加通用的消息渲染函数
+function renderMessageContent(content, container) {
+    try {
+        // 使用marked解析Markdown内容
+        const parsed = marked.parse(content);
+        container.innerHTML = parsed;
+        
+        // 更新空状态显示
+        handleEmptyState();
+        
+        // 为所有链接添加 onclick 事件，使用openModPage函数打开
+        container.querySelectorAll('a').forEach(link => {
+            const url = link.getAttribute('href');
+            link.setAttribute('rel', 'noopener noreferrer'); // 保留安全属性
+            link.removeAttribute('target'); // 移除target属性
+            link.onclick = function(e) {
+                e.preventDefault(); // 阻止默认打开行为
+                openModPage(url); // 使用小窗口打开
+                return false;
+            };
+        });
+
+        // 应用代码高亮
+        container.querySelectorAll('pre code').forEach((block) => {
+            try {
+                if (hljs && typeof hljs.highlightElement === 'function') {
+                    hljs.highlightElement(block);
+                } else {
+                    console.warn('highlight.js 未正确加载或初始化');
+                }
+            } catch (highlightError) {
+                console.error('代码高亮错误:', highlightError);
+            }
+        });
+
+        // 为所有代码块添加复制按钮
+        container.querySelectorAll('pre').forEach(pre => {
+            if (!pre.querySelector('.code-header')) {
+                const codeHeader = document.createElement('div');
+                codeHeader.className = 'code-header';
+
+                const copyButton = document.createElement('button');
+                copyButton.className = 'copy-button';
+                copyButton.innerHTML = '<i class="fas fa-copy"></i> 复制';
+                copyButton.onclick = async () => {
+                    try {
+                        const code = pre.querySelector('code').textContent;
+                        await navigator.clipboard.writeText(code);
+                        copyButton.innerHTML = '<i class="fas fa-check"></i> 已复制';
+                        copyButton.classList.add('copied');
+                        setTimeout(() => {
+                            copyButton.innerHTML = '<i class="fas fa-copy"></i> 复制';
+                            copyButton.classList.remove('copied');
+                        }, 2000);
+                    } catch (err) {
+                        console.error('复制失败:', err);
+                        copyButton.innerHTML = '<i class="fas fa-times"></i> 复制失败';
+                        setTimeout(() => {
+                            copyButton.innerHTML = '<i class="fas fa-copy"></i> 复制';
+                        }, 2000);
+                    }
+                };
+
+                codeHeader.appendChild(copyButton);
+                pre.parentNode.insertBefore(codeHeader, pre);
+            }
+        });
+    } catch (e) {
+        console.error('Markdown渲染错误:', e);
+        container.textContent = content;
+    }
+}
+
+
+// 抽屉切换功能
+document.addEventListener('DOMContentLoaded', () => {
+    const chatToggle = document.getElementById('chatToggle');
+    const chatDrawer = document.getElementById('chatDrawer');
+
+    function toggleDrawer() {
+        // 如果处于全屏模式，先退出全屏模式
+        if (chatDrawer.classList.contains('fullscreen-mode')) {
+            chatDrawer.classList.remove('fullscreen-mode');
+            const fullscreenToggle = document.getElementById('fullscreenToggle');
+            if (fullscreenToggle) {
+                fullscreenToggle.querySelector('i').classList.remove('fa-compress');
+                fullscreenToggle.querySelector('i').classList.add('fa-expand');
+            }
+        }
+        
+        // 然后切换抽屉状态
+        chatDrawer.classList.toggle('active');
+        
+        // 更新切换按钮图标
+        const icon = chatToggle.querySelector('i');
+        if (chatDrawer.classList.contains('active')) {
+            icon.classList.remove('fa-chevron-left');
+            icon.classList.add('fa-chevron-right');
+        } else {
+            icon.classList.remove('fa-chevron-right');
+            icon.classList.add('fa-chevron-left');
+        }
+    }
+
+    if (chatToggle) {
+        chatToggle.addEventListener('click', toggleDrawer);
+    }
+
+    // ESC 键关闭抽屉和退出全屏模式
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            // 如果处于全屏模式，先退出全屏模式
+            if (chatDrawer.classList.contains('fullscreen-mode')) {
+                chatDrawer.classList.remove('fullscreen-mode');
+                const fullscreenToggle = document.getElementById('fullscreenToggle');
+                if (fullscreenToggle) {
+                    fullscreenToggle.querySelector('i').classList.remove('fa-compress');
+                    fullscreenToggle.querySelector('i').classList.add('fa-expand');
+                }
+            } 
+            // 如果抽屉是打开的，则关闭抽屉
+            else if (chatDrawer.classList.contains('active')) {
+                chatDrawer.classList.remove('active');
+                const icon = chatToggle.querySelector('i');
+                icon.classList.remove('fa-chevron-right');
+                icon.classList.add('fa-chevron-left');
+            }
+        }
+    });
+});
+
+// 全屏切换功能
+document.addEventListener('DOMContentLoaded', () => {
+    const fullscreenToggle = document.getElementById('fullscreenToggle');
+    const chatDrawer = document.getElementById('chatDrawer');
+
+    // 默认进入全屏模式
+    // chatDrawer.classList.add('fullscreen-mode');
+    // fullscreenToggle.querySelector('i').classList.remove('fa-expand');
+    // fullscreenToggle.querySelector('i').classList.add('fa-compress');
+
+    fullscreenToggle.addEventListener('click', () => {
+        // 使用CSS类来切换全屏模式，而不是浏览器API
+        if (!chatDrawer.classList.contains('fullscreen-mode')) {
+            // 进入全屏模式
+            chatDrawer.classList.add('fullscreen-mode');
+            fullscreenToggle.querySelector('i').classList.remove('fa-expand');
+            fullscreenToggle.querySelector('i').classList.add('fa-compress');
+        } else {
+            // 退出全屏模式
+            chatDrawer.classList.remove('fullscreen-mode');
+            fullscreenToggle.querySelector('i').classList.remove('fa-compress');
+            fullscreenToggle.querySelector('i').classList.add('fa-expand');
+        }
+    });
+
+    // 更新全屏按钮图标
+    function updateFullscreenButtonIcon() {
+        const icon = fullscreenToggle.querySelector('i');
+        if (chatDrawer.classList.contains('fullscreen-mode')) {
+            icon.classList.remove('fa-expand');
+            icon.classList.add('fa-compress');
+        } else {
+            icon.classList.remove('fa-compress');
+            icon.classList.add('fa-expand');
+        }
+    }
+});
+
+// 获取热门模组相关函数
+function getHotModules() {
+    const popover = document.getElementById('hotModulesPopover');
+    const overlay = document.querySelector('.overlay');
+    const button = document.getElementById('hotModulesBtn');
+
+    if (popover && overlay && button) {
+        // 定位弹出框
+        const buttonRect = button.getBoundingClientRect();
+
+        // 将弹出框添加到body以避免被父元素的overflow属性影响
+        document.body.appendChild(popover);
+
+        // 计算弹出框的位置
+        const left = buttonRect.left;
+        const top = buttonRect.top - 10; // 给一点额外的空间
+
+        popover.style.position = 'fixed';
+        popover.style.left = left + 'px';
+        popover.style.bottom = (window.innerHeight - top) + 'px';
+
+        // 确保弹出框不会超出视口左侧
+        if (left < 0) {
+            popover.style.left = '10px';
+        }
+
+        // 确保弹出框不会超出视口右侧
+        const popoverWidth = 350; // 与CSS中定义的宽度一致
+        if (left + popoverWidth > window.innerWidth) {
+            popover.style.left = (window.innerWidth - popoverWidth - 10) + 'px';
+        }
+
+        // 激活弹出框和遮罩
+        popover.classList.add('active');
+        overlay.classList.add('active');
+
+        // 设置默认日期范围（今天到7天后）
+        const today = new Date();
+        const nextWeek = new Date();
+        nextWeek.setDate(today.getDate() + 7);
+
+        // 初始化日期选择器
+        initDateRangePicker(today, nextWeek);
+    }
+}
+
+// 初始化日期范围选择器
+function initDateRangePicker(startDate, endDate) {
+    // 销毁之前的实例（如果存在）
+    const dateRangePicker = $('#dateRangePicker').data('daterangepicker');
+    if (dateRangePicker) {
+        dateRangePicker.remove();
+    }
+
+    // 初始化日期范围选择器
+    $('#dateRangePicker').daterangepicker({
+        startDate: startDate,
+        endDate: endDate,
+        opens: 'center',
+        autoApply: true,
+        locale: {
+            format: 'YYYY-MM-DD',
+            separator: ' 至 ',
+            applyLabel: '确定',
+            cancelLabel: '取消',
+            fromLabel: '从',
+            toLabel: '到',
+            customRangeLabel: '自定义',
+            weekLabel: 'W',
+            daysOfWeek: ['日', '一', '二', '三', '四', '五', '六'],
+            monthNames: ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'],
+            firstDay: 1
+        },
+        ranges: {
+            '昨天': [moment().subtract(1, 'days'), moment().subtract(1, 'days')],
+            '最近7天': [moment().subtract(6, 'days'), moment()],
+            '最近30天': [moment().subtract(29, 'days'), moment()],
+            '本月': [moment().startOf('month'), moment().endOf('month')],
+            '上月': [moment().subtract(1, 'month').startOf('month'), moment().subtract(1, 'month').endOf('month')]
+        },
+        // 添加自定义范围的默认日期
+        startDate: moment().subtract(2, 'days'),
+        endDate: moment()
+    }, function (start, end) {
+        // 更新隐藏的输入框值
+        document.getElementById('dateFrom').value = formatDate(start.toDate());
+        document.getElementById('dateTo').value = formatDate(end.toDate());
+    });
+
+    // 设置初始值
+    document.getElementById('dateFrom').value = formatDate(startDate);
+    document.getElementById('dateTo').value = formatDate(endDate);
+
+    // 设置显示文本
+    $('#dateRangePicker').val(formatDate(startDate) + ' 至 ' + formatDate(endDate));
+}
+
+function closeHotModulesPopover() {
+    const popover = document.getElementById('hotModulesPopover');
+    const overlay = document.querySelector('.overlay');
+    if (popover && overlay) {
+        popover.classList.remove('active');
+        overlay.classList.remove('active');
+    }
+}
+
+// 格式化日期为YYYY-MM-DD
+function formatDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+// 专门提示用户这个功能还没做好
+function checkAutoDownload() {
+    const isDownload = document.getElementById('isDownload').checked;
+    if (isDownload) {
+        NotificationManager.warning('还没做好【自动下载】这个功能，请取消勾选，可赞助、👍+🪙🪙+转发为up提速！！！');
+        return false;
+    }
+    return true;
+}
+
+// 提交查询
+async function submitHotModules() {
+    // 检查自动下载功能
+    if (!checkAutoDownload()) {
+        return;
+    }
+
+    // 从隐藏输入框获取日期值
+    const dateFrom = document.getElementById('dateFrom').value;
+    const dateTo = document.getElementById('dateTo').value;
+    const sortBy = document.getElementById('sortBy').value;
+    const isDownload = document.getElementById('isDownload').checked;
+
+    // 验证日期
+    if (!dateFrom || !dateTo) {
+        NotificationManager.error('请选择日期范围');
+        return;
+    }
+
+    // 验证日期顺序
+    if (new Date(dateFrom) > new Date(dateTo)) {
+        NotificationManager.error('开始日期不能大于结束日期');
+        return;
+    }
+    // 关闭弹出框
+    closeHotModulesPopover();
+    document.querySelector('.stop-button').classList.remove('hidden');
+    document.querySelector('.stop-button').classList.add('visible');
+    try {
+        // 获取sid
+        const sid = localStorage.getItem('sid');
+        const response = await fetch('/api/get-mods', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                date_from: dateFrom,
+                date_to: dateTo,
+                sort_by: sortBy,
+                is_Download: isDownload,
+                isDeepThinking: localStorage.getItem('isDeepThinking') === 'true',
+                sid: sid
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            // 更新思考标题
+            // updateThinkingHeader(`已获取模组数据`);
+            //隐藏停止按钮
+            document.querySelector('.stop-button').classList.add('hidden');
+            document.querySelector('.stop-button').classList.remove('visible');
+        } else {
+            console.error('获取模组数据失败:', data.error);
+            document.querySelector('.stop-button').classList.add('hidden');
+            document.querySelector('.stop-button').classList.remove('visible');
+        }
+    } catch (error) {
+        console.error('请求出错:', error);
+        document.querySelector('.stop-button').classList.add('hidden');
+        document.querySelector('.stop-button').classList.remove('visible');
+    }
+}
+
+// 工具按钮点击事件
+document.addEventListener('DOMContentLoaded', function() {
+    const addToolsBtn = document.getElementById('addToolsBtn');
+    const toolsPopover = document.getElementById('toolsPopover');
+    const userInput = document.getElementById('userInput');
+
+    // 点击工具按钮显示/隐藏弹出框
+    addToolsBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        toolsPopover.classList.toggle('active');
+    });
+
+    // 点击工具项插入文本
+    document.querySelectorAll('.tool-item').forEach(item => {
+        item.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const text = this.getAttribute('data-text');
+            const cursorPos = userInput.selectionStart;
+            const textBefore = userInput.value.substring(0, cursorPos);
+            const textAfter = userInput.value.substring(cursorPos);
+            
+            userInput.value = textBefore + text + ' ' + textAfter;
+            toolsPopover.classList.remove('active');
+            
+            // 设置光标位置到插入文本之后
+            const newPos = cursorPos + text.length + 1;
+            userInput.setSelectionRange(newPos, newPos);
+            userInput.focus();
+        });
+    });
+
+    // 点击其他地方关闭弹出框
+    document.addEventListener('click', function(e) {
+        if (!toolsPopover.contains(e.target) && e.target !== addToolsBtn) {
+            toolsPopover.classList.remove('active');
+        }
+    });
+});
+
+// 智能滚动按钮功能
+document.addEventListener('DOMContentLoaded', function() {
+    const scrollButton = document.getElementById('scrollButton');
+    const messageArea = document.getElementById('messageArea');
+    let isAtBottom = true;
+
+    // 更新按钮状态
+    function updateScrollButtonState() {
+        const scrollTop = messageArea.scrollTop;
+        const scrollHeight = messageArea.scrollHeight;
+        const clientHeight = messageArea.clientHeight;
+        const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+
+        // 根据滚动位置更新按钮状态
+        if (scrollPercentage >= 0.95) {
+            // 在底部时，按钮显示在底部，箭头向下
+            scrollButton.classList.remove('top');
+            scrollButton.classList.add('bottom');
+            scrollButton.title = '滚动到顶部';
+            isAtBottom = true;
+        } else if (scrollTop <= 100) {
+            // 在顶部时，按钮显示在顶部，箭头向上
+            scrollButton.classList.add('top');
+            scrollButton.classList.remove('bottom');
+            scrollButton.title = '滚动到底部';
+            isAtBottom = false;
+        } else if(scrollTop > 100 && scrollTop < 200) {
+            // 在中间位置时，按钮显示在底部，箭头向下
+            scrollButton.classList.add('top');
+            scrollButton.classList.remove('bottom');
+            scrollButton.title = '滚动到底部';
+            isAtBottom = false;
+        }
+        else {
+
+        }
+    }
+
+    // 点击按钮处理
+    scrollButton.addEventListener('click', function() {
+        if (isAtBottom) {
+            // 滚动到顶部
+            messageArea.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        } else {
+            // 滚动到底部
+            messageArea.scrollTo({
+                top: messageArea.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+    });
+
+    // 监听滚动事件
+    messageArea.addEventListener('scroll', updateScrollButtonState);
+    
+    // 初始化按钮状态
+    updateScrollButtonState();
+});
+async function updateAllMods() {
+    NotificationManager.warning('还没做好这个功能，可赞助、👍+🪙🪙+转发为up提速！！！');
+}
+
+async function fnex() {
+    NotificationManager.warning('还没做好这个功能，可赞助、👍+🪙🪙+转发为up提速！！！');
+}
+
+// 存储MOD列表数据
+let modsList = [];
+
+// 打开批量下载模态窗口
+async function batchDownload() {
+    try {
+        // 显示加载效果
+        LoadingController.show('正在获取可下载的MOD列表...');
+        
+        // 获取下载链接
+        const response = await fetch('/api/get-download-links', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                isDeepThinking: localStorage.getItem('isDeepThinking') === 'true'
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('获取下载链接失败');
+        }
+        
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || '获取下载链接失败');
+        }
+        
+        // 更新MOD列表
+        modsList = data.links.map((link, index) => ({
+            id: index,
+            name: link.name || '未知MOD',
+            nameCn: link.nameCn || '未知MOD',
+            url: link.url,
+            mod_id: link.mod_id || '',
+            mod_url: link.mod_url || '',
+            mod_size: link.mod_size || '未知大小',
+            selected: false,
+            status: link.is_downloaded ? 'completed' : 'pending', // 根据是否已下载设置状态
+            progress: link.is_downloaded ? 100 : 0
+        }));
+        
+        // 渲染MOD列表
+        renderModsList();
+        
+        // 显示模态窗口
+        const modal = document.getElementById('batchDownloadModal');
+        modal.classList.add('active');
+        
+        // 隐藏加载效果
+        LoadingController.hide();
+        
+    } catch (error) {
+        console.error('批量下载初始化失败:', error);
+        LoadingController.hide();
+        NotificationManager.error('获取MOD列表失败: ' + error.message);
+    }
+}
+
+// 关闭模态窗口
+function closeBatchDownloadModal() {
+    const modal = document.getElementById('batchDownloadModal');
+    modal.classList.remove('active');
+}
+
+// 渲染MOD列表
+function renderModsList() {
+    const container = document.getElementById('modsList');
+    container.innerHTML = '';
+    modsList.forEach(mod => {
+        const modElement = document.createElement('div');
+        modElement.className = 'mod-item';
+        modElement.dataset.modId = mod.id;  // 添加data属性用于搜索
+        modElement.innerHTML = `
+            <label class="checkbox-label">
+                <span class="custom-checkbox">
+                    <input type="checkbox" ${mod.selected ? 'checked' : ''} onchange="toggleMod(${mod.id})">
+                    <span class="checkmark"></span>
+                </span>
+            </label>
+            <div class="mod-info">
+                ${mod.mod_id ? `
+                    <div class="mod-id-container">
+                        <span class="mod-id" title="点击访问MOD页面" onclick="openModPage('${mod.mod_url}')">
+                            MOD ID: ${mod.mod_id}
+                        </span>
+                        <button class="single-download-btn" onclick="${mod.status === 'downloading' ? `cancelDownload(${mod.id})` : `downloadSingleMod(${mod.id})`}" 
+                                title="${mod.status === 'completed' ? '重新下载此MOD' : mod.status === 'downloading' ? '取消下载' : '单独下载此MOD'}" 
+                                ${mod.status === 'downloading' ? '' : ''}>
+                            <i class="fas fa-${mod.status === 'downloading' ? 'times' : 'download'}"></i>
+                            ${mod.status === 'completed' ? '重新下载' : mod.status === 'downloading' ? '取消下载' : '下载'}
+                        </button>
+                    </div>
+                ` : ''}
+                <div class="mod-details">
+                    <div class="mod-name">${mod.name}</div>
+                    <div class="mod-name-cn">${mod.mod_size}</div>
+                </div>
+                ${mod.error ? `<div class="mod-error">${mod.error}</div>` : ''}
+            </div>
+            <div class="download-status">
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${mod.progress}%"></div>
+                </div>
+                <div class="status-info">
+                    <span class="progress-text">${mod.progress}%</span>
+                    ${mod.speed ? `<span class="speed-text">${mod.speed}</span>` : ''}
+                </div>
+                <div class="status-icons">
+                    <i class="fas fa-${getStatusIcon(mod.status)} status-icon ${mod.status}" 
+                       ${mod.error ? `title="${mod.error}"` : ''}></i>
+                    ${mod.status === 'completed' ? `
+                        <i class="fas fa-folder-open open-folder-icon" 
+                           data-filename="${mod.name}"
+                           title="打开文件所在位置"></i>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+        container.appendChild(modElement);
+    });
+    
+    updateSelectedCount();
+}
+
+// 添加取消下载的函数
+function cancelDownload(modId) {
+    fetch('/api/cancel-download', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            mod_id: modId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // 更新mod状态
+            const mod = modsList.find(m => m.id === modId);
+            if (mod) {
+                mod.status = 'cancelled';
+                mod.error = '下载已取消';
+                renderModsList();
+            }
+            NotificationManager.info('已取消下载');
+        } else {
+            NotificationManager.error('取消下载失败: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('取消下载失败:', error);
+        NotificationManager.error('取消下载失败');
+    });
+}
+
+// 获取状态图标
+function getStatusIcon(status) {
+    switch (status) {
+        case 'pending': return 'clock';
+        case 'downloading': return 'spinner';
+        case 'completed': return 'check-circle';
+        case 'error': return 'exclamation-circle';
+        default: return 'clock';
+    }
+}
+
+// 切换MOD选中状态
+function toggleMod(id) {
+    const mod = modsList.find(m => m.id === id);
+    if (mod) {
+        mod.selected = !mod.selected;
+        updateSelectedCount();
+    }
+}
+
+// 切换全选状态
+function toggleSelectAll() {
+    const selectAllCheckbox = document.getElementById('selectAllMods');
+    const isSelected = selectAllCheckbox.checked;
+    
+    modsList.forEach(mod => {
+        mod.selected = isSelected;
+    });
+    
+    renderModsList();
+}
+
+// 更新选中数量
+function updateSelectedCount() {
+    const selectedCount = modsList.filter(mod => mod.selected).length;
+    document.getElementById('selectedModCount').textContent = selectedCount;
+}
+
+// 过滤MOD列表
+function filterMods() {
+    const searchInput = document.getElementById('modSearchInput');
+    const searchText = searchInput.value.toLowerCase();
+    
+    modsList.forEach(mod => {
+        const modElement = document.querySelector(`[data-mod-id="${mod.id}"]`);
+        if (modElement) {
+            const isVisible = mod.name.toLowerCase().includes(searchText);
+            modElement.style.display = isVisible ? 'flex' : 'none';
+        }
+    });
+}
+
+// 开始批量下载
+async function startBatchDownload() {
+    const selectedMods = modsList.filter(mod => mod.selected);
+    if (selectedMods.length === 0) {
+        NotificationManager.error('请选择要下载的MOD');
+        return;
+    }
+    
+    // 添加一个标志位，用于跟踪是否已经显示过下载完成通知
+    let hasShownCompletionNotification = false;
+    
+    try {
+        // 发送下载请求
+        const response = await fetch('/api/start-batch-download', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                mods: selectedMods.map(mod => ({
+                    id: mod.id,
+                    url: mod.url
+                }))
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('启动下载失败');
+        }
+        
+        // 移除之前可能存在的监听器，避免重复绑定
+        socket.off('download_progress');
+        
+        // 监听下载进度
+        socket.on('download_progress', (data) => {
+            const mod = modsList.find(m => m.id === data.id);
+            if (mod) {
+                mod.progress = data.progress;
+                mod.status = data.status;
+                mod.speed = data.speed;
+                mod.error = data.error;
+                renderModsList();
+
+                // 检查是否所有选中的MOD都下载完成，且尚未显示完成通知
+                const allCompleted = selectedMods.every(m => m.status === 'completed');
+                if (allCompleted && !hasShownCompletionNotification) {
+                    // 标记已显示通知，防止重复
+                    hasShownCompletionNotification = true;
+                    
+                    // 显示下载完成通知
+                    NotificationManager.success(`所有选中的${selectedMods.length}个MOD已下载完成！`);
+                }
+            }
+        });
+        
+        // 更新状态为下载中
+        selectedMods.forEach(mod => {
+            mod.status = 'downloading';
+            mod.progress = 0;
+        });
+        
+        renderModsList();
+        
+    } catch (error) {
+        console.error('批量下载失败:', error);
+        NotificationManager.error('启动下载失败: ' + error.message);
+    }
+}
+
+// 添加单个MOD下载功能
+async function downloadSingleMod(id) {
+    const mod = modsList.find(m => m.id === id);
+    if (!mod) return;
+    
+    // 设置选中状态
+    modsList.forEach(m => m.selected = m.id === id);
+    updateSelectedCount();
+    
+    // 直接调用批量下载函数
+    await startBatchDownload();
+}
+
+// 添加打开文件位置的函数
+async function openFileLocation(filename) {
+
+    console.log(123,"执行位置打开");
+    try {
+        // 对文件名进行编码处理
+        const encodedFilename = encodeURIComponent(filename);
+        
+        const response = await fetch('/api/open-file-location', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                filename: encodedFilename
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('打开文件位置失败');
+        }
+        
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || '打开文件位置失败');
+        }
+    } catch (error) {
+        console.error('打开文件位置失败:', error);
+        NotificationManager.error('打开文件位置失败: ' + error.message);
+    }
+}
+
+// 事件委托处理打开文件位置
+document.addEventListener('DOMContentLoaded', function() {
+    document.body.addEventListener('click', function(e) {
+        const target = e.target;
+        if (target.classList.contains('open-folder-icon')) {
+            const filename = target.dataset.filename;
+            if (filename) {
+                openFileLocation(filename);
+            }
+        }
+    });
+});
+
+// 测试通知的函数
+function testNotifications() {
+    // 依次显示所有类型的通知
+    setTimeout(() => {
+        NotificationManager.success('这是一条成功通知');
+    }, 0);
+    
+    setTimeout(() => {
+        NotificationManager.info('这是一条信息通知');
+    }, 1000);
+    
+    setTimeout(() => {
+        NotificationManager.warning('这是一条警告通知');
+    }, 2000);
+    
+    setTimeout(() => {
+        NotificationManager.error('这是一条错误通知');
+    }, 3000);
+}
+
+// 在小窗口中打开超链接内容
+function openModPage(url) {
+    const width = 800;
+    const height = 600;
+    const left = (screen.width - width) / 2;
+    const top = (screen.height - height) / 2;
+    
+    window.open(
+        url, 
+        'mod_page_window', 
+        `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,status=yes`
+    );
+}
+
+// 检查是否已选择游戏
+function checkGameSelected() {
+    return new Promise((resolve) => {
+        fetch('/api/check-game-config')
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success || !data.hasGame) {
+                    showGameSelectModal();
+                    hideGameInfoBar();
+                    resolve(false);
+                } else {
+                    selectedGame = data.game;
+                    // 获取完整的游戏信息
+                    fetchGameDetails(data.game.GAME_ID).then(() => {
+                        resolve(true);
+                    });
+                }
+            })
+            .catch(error => {
+                console.error('检查游戏配置失败:', error);
+                showGameSelectModal();
+                hideGameInfoBar();
+                resolve(false);
+            });
+    });
+}
+
+// 获取游戏详细信息
+async function fetchGameDetails(gameId) {
+    try {
+        const response = await fetch(`/api/get-game-details?game_id=${gameId}`);
+        const data = await response.json();
+        if (data.success) {
+            updateGameInfoBar(data.game);
+        } else {
+            hideGameInfoBar();
+        }
+    } catch (error) {
+        console.error('获取游戏详情失败:', error);
+        hideGameInfoBar();
+    }
+}
+
+// 更新游戏信息栏
+function updateGameInfoBar(game) {
+    const gameInfoBar = document.getElementById('gameInfoBar');
+    const currentGameImage = document.getElementById('currentGameImage');
+    const currentGameName = document.getElementById('currentGameName');
+    const currentGameMods = document.getElementById('currentGameMods').querySelector('span');
+    const currentGameDownloads = document.getElementById('currentGameDownloads').querySelector('span');
+
+    if (game) {
+        currentGameImage.src = game.tileImageUrl;
+        currentGameImage.alt = game.name;
+        currentGameName.textContent = game.name;
+        currentGameMods.textContent = formatNumber(game.modCount);
+        currentGameDownloads.textContent = formatNumber(game.downloadCount);
+        gameInfoBar.style.display = 'flex';
+    } else {
+        hideGameInfoBar();
+    }
+}
+
+// 隐藏游戏信息栏
+function hideGameInfoBar() {
+    const gameInfoBar = document.getElementById('gameInfoBar');
+    // gameInfoBar.style.display = 'none';
+}
+
+// 显示游戏选择模态窗口
+async function showGameSelectModal() {
+    const modal = document.getElementById('gameSelectModal');
+    const closeBtn = document.getElementById('closeGameSelectBtn');
+    
+    try {
+        // 检查是否已配置游戏
+        const response = await fetch('/api/check-game-config');
+        const data = await response.json();
+        
+        // 只有在已经配置过游戏的情况下才显示关闭按钮
+        if (data.success && data.hasGame) {
+            closeBtn.style.display = 'block';
+        } else {
+            closeBtn.style.display = 'none';
+        }
+        
+        // 更新历史游戏记录
+        updateHistoryGames();
+        
+        // 初始化标签页
+        initTabs();
+        
+        // 加载收藏的游戏
+        loadFavoriteGames();
+
+        // 添加游戏搜索事件监听
+        const gameSearchInput = document.getElementById('gameSearchInput');
+        if (gameSearchInput) {
+            // 移除可能存在的旧事件监听器
+            gameSearchInput.removeEventListener('input', handleGameSearch);
+            gameSearchInput.removeEventListener('keypress', handleSearchKeyPress);
+            
+            // 添加新的事件监听器
+            gameSearchInput.addEventListener('input', handleGameSearch);
+            gameSearchInput.addEventListener('keypress', handleSearchKeyPress);
+        }
+    } catch (error) {
+        console.error('检查游戏配置失败:', error);
+        closeBtn.style.display = 'none';
+    }
+    
+    modal.classList.add('active');
+    loadGames();
+}
+
+// 关闭游戏选择模态窗口
+function closeGameSelectModal() {
+    const modal = document.getElementById('gameSelectModal');
+    modal.classList.remove('active');
+}
+
+// 选择游戏
+async function selectGame(game) {
+    try {
+        const response = await fetch('/api/save-game-config', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                game_id: game.id,
+                domain_name: game.domainName
+            })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            selectedGame = game;
+            // 添加到历史记录
+            addToHistory(game);
+            document.getElementById('gameSelectModal').classList.remove('active');
+            updateGameInfoBar(game);
+            NotificationManager.success(`已选择游戏: ${game.name}`);
+            // 清空消息区域
+            document.getElementById('messageArea').innerHTML = '';
+            // 显示关闭按钮
+            document.getElementById('closeGameSelectBtn').style.display = 'block';
+            
+            // 重新获取聊天历史和更新聊天会话列表
+            await fetchChatHistory();
+            await loadChatHistoryList();
+            // 更新空状态显示
+            handleEmptyState();
+        } else {
+            NotificationManager.error('保存游戏配置失败');
+        }
+    } catch (error) {
+        console.error('保存游戏配置失败:', error);
+        NotificationManager.error('保存游戏配置失败');
+    }
+}
+
+
+
+// 创建游戏卡片
+async function createGameCard(game) {
+    const card = document.createElement('div');
+    card.className = 'game-card';
+    
+    // 检查游戏是否已收藏
+    const isFavorited = await isGameFavorited(game.id);
+    
+    card.innerHTML = `
+        <button class="favorite-button ${isFavorited ? 'active' : ''}" title="${isFavorited ? '取消收藏' : '收藏游戏'}">
+            <i class="fas ${isFavorited ? 'fa-heart' : 'fa-heart'}"></i>
+        </button>
+        <img src="${game.tileImageUrl}" alt="${game.name}" class="game-image">
+        <div class="game-info">
+            <div class="game-name">${game.name}</div>
+            <div class="game-stats">
+                <div class="game-stat">
+                    <i class="fas fa-download"></i>
+                    <span>${formatNumber(game.downloadCount)}</span>
+                </div>
+                <div class="game-stat">
+                    <i class="fas fa-cube"></i>
+                    <span>${formatNumber(game.modCount)}</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 添加收藏按钮点击事件
+    const favoriteButton = card.querySelector('.favorite-button');
+    favoriteButton.addEventListener('click', (e) => toggleFavorite(e, game));
+
+    // 添加卡片点击事件（选择游戏）
+    card.addEventListener('click', () => selectGame(game));
+    
+    return card;
+}
+
+// 格式化数字
+function formatNumber(num) {
+    if (num >= 1e9) return (num / 1e9).toFixed(1) + 'B';
+    if (num >= 1e6) return (num / 1e6).toFixed(1) + 'M';
+    if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+    return num.toString();
+}
+
+// 添加游戏搜索防抖
+let searchTimeout;
+function handleGameSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        loadGames(true);
+    }, 300);
+}
+
+// 更新分页组件
+function updatePagination(currentPage, totalPages, totalCount) {
+    const paginationContainer = document.getElementById('gamesPagination');
+    const maxVisiblePages = 5; // 最多显示的页码数
+    
+    let paginationHTML = '';
+    
+    // 添加上一页按钮
+    paginationHTML += `
+        <button class="pagination-button" onclick="changePage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>
+            <i class="fas fa-chevron-left"></i>
+        </button>
+    `;
+
+    // 计算显示的页码范围
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    // 调整startPage确保显示足够的页码
+    if (endPage - startPage + 1 < maxVisiblePages) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    // 添加第一页
+    if (startPage > 1) {
+        paginationHTML += `
+            <button class="pagination-button" onclick="changePage(1)">1</button>
+        `;
+        if (startPage > 2) {
+            paginationHTML += '<span class="pagination-ellipsis">...</span>';
+        }
+    }
+
+    // 添加页码按钮
+    for (let i = startPage; i <= endPage; i++) {
+        paginationHTML += `
+            <button class="pagination-button ${i === currentPage ? 'active' : ''}" 
+                    onclick="changePage(${i})">${i}</button>
+        `;
+    }
+
+    // 添加最后一页
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            paginationHTML += '<span class="pagination-ellipsis">...</span>';
+        }
+        paginationHTML += `
+            <button class="pagination-button" onclick="changePage(${totalPages})">${totalPages}</button>
+        `;
+    }
+
+    // 添加下一页按钮
+    paginationHTML += `
+        <button class="pagination-button" onclick="changePage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''}>
+            <i class="fas fa-chevron-right"></i>
+        </button>
+    `;
+
+    // 添加总数信息
+    paginationHTML += `
+        <span class="pagination-info">共 ${totalCount} 个游戏</span>
+    `;
+
+    paginationContainer.innerHTML = paginationHTML;
+}
+
+// 切换页码
+async function changePage(page) {
+    if (page < 1 || page > totalPages || isLoading) return;
+    currentPage = page;
+    await loadGames();
+}
+
+// 初始化游戏选择相关事件
+document.addEventListener('DOMContentLoaded', async function() {
+    // 检查是否已选择游戏
+    const hasGame = await checkGameSelected();
+    if (!hasGame) {
+        // 添加游戏搜索事件监听
+        document.getElementById('gameSearchInput').addEventListener('input', handleGameSearch);
+        
+        // 添加加载更多事件监听
+        document.getElementById('loadMoreGames').addEventListener('click', () => {
+            currentPage++;
+            loadGames();
+        });
+    }
+    
+});
+
+
+// 获取历史游戏记录
+function getHistoryGames() {
+    try {
+        const history = localStorage.getItem(HISTORY_GAMES_KEY);
+        return history ? JSON.parse(history) : [];
+    } catch (error) {
+        console.error('获取历史游戏记录失败:', error);
+        return [];
+    }
+}
+
+// 添加游戏到历史记录
+function addToHistory(game) {
+    try {
+        let history = getHistoryGames();
+        // 移除已存在的相同游戏
+        history = history.filter(g => Number(g.id) !== Number(game.id));
+        // 添加到开头
+        history.unshift({
+            id: game.id,
+            name: game.name,
+            tileImageUrl: game.tileImageUrl
+        });
+        // 限制数量
+        if (history.length > MAX_HISTORY_GAMES) {
+            history = history.slice(0, MAX_HISTORY_GAMES);
+        }
+        localStorage.setItem(HISTORY_GAMES_KEY, JSON.stringify(history));
+        updateHistoryGames();
+    } catch (error) {
+        console.error('添加历史游戏记录失败:', error);
+        NotificationManager.error('添加历史记录失败');
+    }
+}
+
+// 从历史记录中移除游戏
+function removeFromHistory(gameId) {
+    try {
+        let history = getHistoryGames();
+        // 使用数字类型进行比较
+        history = history.filter(g => Number(g.id) !== Number(gameId));
+        localStorage.setItem(HISTORY_GAMES_KEY, JSON.stringify(history));
+        updateHistoryGames();
+        
+        // 添加删除成功的通知
+        NotificationManager.success('已从历史记录中移除该游戏');
+    } catch (error) {
+        console.error('移除历史游戏记录失败:', error);
+        NotificationManager.error('移除历史记录失败');
+    }
+}
+
+// 更新历史游戏记录显示
+async function updateHistoryGames() {
+    const historyContainer = document.getElementById('historyGames');
+    const history = getHistoryGames();
+    
+    if (history.length === 0) {
+        historyContainer.style.display = 'none';
+        return;
+    }
+    
+    historyContainer.style.display = 'flex';
+    
+    // 使用Promise.all等待所有游戏的收藏状态检查完成
+    const historyItems = await Promise.all(history.map(async game => {
+        const isFavorited = await isGameFavorited(game.id);
+        return `
+            <div class="history-game-tag" onclick="searchHistoryGame('${game.name}')">
+                <img src="${game.tileImageUrl}" alt="${game.name}">
+                <span>${game.name}</span>
+                <i class="fas ${isFavorited ? 'fa-heart' : 'fa-heart-o'}" 
+                   style="color: ${isFavorited ? '#ff4757' : 'inherit'}; margin-left: 4px;"></i>
+                <i class="fas fa-times remove-icon" onclick="event.stopPropagation(); removeFromHistory(${game.id})"></i>
+            </div>
+        `;
+    }));
+    
+    historyContainer.innerHTML = historyItems.join('');
+}
+
+// 搜索历史游戏
+function searchHistoryGame(gameName) {
+    const searchInput = document.getElementById('gameSearchInput');
+    searchInput.value = gameName;
+    handleGameSearch();
+}
+
+// 收藏游戏列表缓存
+let favoriteGamesCache = null;
+
+// 清除收藏游戏缓存
+function clearFavoriteGamesCache() {
+    favoriteGamesCache = null;
+}
+
+// 获取收藏的游戏列表
+async function getFavoriteGames() {
+    try {
+        // 如果有缓存，直接返回缓存数据
+        if (favoriteGamesCache !== null) {
+            return favoriteGamesCache;
+        }
+
+        const response = await fetch('/api/favorite-games-list');
+        const data = await response.json();
+        if (data.success) {
+            // 对游戏列表进行去重处理
+            const uniqueGames = data.games.filter((game, index, self) =>
+                index === self.findIndex(g => Number(g.id) === Number(game.id))
+            );
+            // 更新缓存
+            favoriteGamesCache = uniqueGames;
+            return uniqueGames;
+        } else {
+            console.error('获取收藏游戏失败:', data.error);
+            return [];
+        }
+    } catch (error) {
+        console.error('获取收藏游戏失败:', error);
+        return [];
+    }
+}
+
+// 检查游戏是否已收藏
+async function isGameFavorited(gameId) {
+    const favorites = await getFavoriteGames();
+    return favorites.some(game => Number(game.id) === Number(gameId));
+}
+
+// 切换游戏收藏状态
+async function toggleFavorite(event, game) {
+    event.stopPropagation();
+
+    try {
+        // 获取收藏按钮元素
+        const favoriteButton = event.currentTarget;
+        if (!favoriteButton) {
+            throw new Error('找不到收藏按钮元素');
+        }
+
+        const gameId = Number(game.id);
+        const isFavorited = await isGameFavorited(gameId);
+        
+        let response;
+        if (isFavorited) {
+            // 取消收藏
+            response = await fetch(`/api/favorite-games/${gameId}`, {
+                method: 'DELETE'
+            });
+        } else {
+            // 添加收藏
+            response = await fetch('/api/favorite-games', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    id: game.id,
+                    name: game.name,
+                    tileImageUrl: game.tileImageUrl,
+                    modCount: game.modCount,
+                    downloadCount: game.downloadCount,
+                    domainName: game.domainName
+                })
+            });
+        }
+
+        const data = await response.json();
+        if (!data.success) {
+            throw new Error(data.error || '操作失败');
+        }
+
+        // 清除收藏游戏缓存
+        clearFavoriteGamesCache();
+
+        // 更新UI
+        favoriteButton.classList.toggle('active');
+        favoriteButton.title = favoriteButton.classList.contains('active') ? '取消收藏' : '收藏游戏';
+        const icon = favoriteButton.querySelector('i');
+        if (icon) {
+            icon.className = `fas ${favoriteButton.classList.contains('active') ? 'fa-heart' : 'fa-heart'}`;
+        }
+
+        // 显示操作结果通知
+        if (favoriteButton.classList.contains('active')) {
+            NotificationManager.success(`已收藏: ${game.name}`);
+        } else {
+            NotificationManager.info(`已取消收藏: ${game.name}`);
+        }
+        
+        // 如果在历史记录中，也更新历史记录的显示
+        await updateHistoryGames();
+        
+        // 如果当前在收藏标签页，更新收藏列表
+        const favoriteGamesTab = document.querySelector('.tab-button[data-tab="favoriteGames"]');
+        if (favoriteGamesTab && favoriteGamesTab.classList.contains('active')) {
+            await loadFavoriteGames();
+        }
+
+    } catch (error) {
+        console.error('切换收藏状态失败:', error);
+        NotificationManager.error(error.message || '操作失败，请重试');
+    }
+}
+
+// 初始化标签页
+function initTabs() {
+    const tabButtons = document.querySelectorAll('.tab-button');
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            // 移除所有标签页的active类
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+            
+            // 添加当前标签页的active类
+            button.classList.add('active');
+            const tabId = button.dataset.tab;
+            document.getElementById(tabId).classList.add('active');
+            
+            // 如果切换到收藏标签页，加载收藏的游戏
+            if (tabId === 'favoriteGames') {
+                loadFavoriteGames();
+            }
+        });
+    });
+}
+
+// 加载收藏的游戏
+async function loadFavoriteGames() {
+    const favoriteGamesGrid = document.getElementById('favoriteGamesGrid');
+    const favorites = await getFavoriteGames();
+    
+    if (favorites.length === 0) {
+        favoriteGamesGrid.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-heart"></i>
+                <p>还没有收藏任何游戏</p>
+            </div>
+        `;
+        return;
+    }
+    
+    favoriteGamesGrid.innerHTML = '';
+    try {
+        // 使用Promise.all等待所有游戏卡片创建完成
+        const gameCards = await Promise.all(favorites.map(game => createGameCard(game)));
+        gameCards.forEach(card => favoriteGamesGrid.appendChild(card));
+    } catch (error) {
+        console.error('加载收藏游戏失败:', error);
+        NotificationManager.error('加载收藏游戏失败');
+    }
+}
+
+// 格式化时间显示
+function formatTime(timestamp) {
+    const now = new Date();
+    const date = new Date(timestamp);
+    const diff = now - date;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) {
+        return `${days}天前`;
+    } else if (hours > 0) {
+        return `${hours}小时前`;
+    } else if (minutes > 0) {
+        return `${minutes}分钟前`;
+    } else {
+        return '刚刚';
+    }
+}
+
+// 生成空状态HTML的函数
+function generateEmptyStateHTML() {
+    return `
+        <div class="empty-message-state" style="display: block;">
+            <div class="empty-message-icon">
+                <div class="avatar ai" title="点击更换头像"></div>
+            </div>
+            <h2 class="empty-message-title">我是你的N网AI知识库v1.0.1</h2>
+            <p class="empty-message-subtitle">由DeepSeek大模型驱动，支持三千多款游戏模组的下载和安装指导，随时待命为您服务！点击我可以自定义头像设置</p>
+            <div class="empty-message-features">
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fas fa-download"></i>
+                    </div>
+                    <div class="feature-title">模组下载</div>
+                    <div class="feature-desc">支持批量下载和自动更新</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <div class="feature-title">安装指导</div>
+                    <div class="feature-desc">详细的安装步骤说明</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">
+                        <i class="fas fa-sync"></i>
+                    </div>
+                    <div class="feature-title">实时更新</div>
+                    <div class="feature-desc">及时获取最新模组信息</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 添加重置消息区域的函数
+function resetMessageArea() {
+    const messageArea = document.getElementById('messageArea');
+    messageArea.innerHTML = generateEmptyStateHTML();
+    
+    // 初始化空状态AI头像的点击事件
+    const emptyStateAvatar = messageArea.querySelector('.empty-message-icon .avatar.ai');
+    if (emptyStateAvatar) {
+        initAvatarUpload(emptyStateAvatar);
+        
+        // 应用当前的头像设置
+        const cachedAiAvatar = localStorage.getItem('aiAvatar');
+        if (cachedAiAvatar) {
+            emptyStateAvatar.classList.add('custom-avatar');
+            emptyStateAvatar.classList.remove('default-avatar');
+        } else {
+            emptyStateAvatar.classList.remove('custom-avatar');
+            emptyStateAvatar.classList.add('default-avatar');
+        }
+    }
+    
+    return messageArea;
+}
+
+// 加载聊天会话历史列表
+async function loadChatHistoryList() {
+    try {
+        const response = await fetch('/api/chat-history');
+        const data = await response.json();
+        
+        if (data.success && data.sessions) {
+            const historyList = document.getElementById('chatHistoryList');
+            historyList.innerHTML = '';
+            
+            // 渲染聊天会话列表
+            data.sessions.forEach(session => {
+                const chatItem = createChatHistoryItem(session);
+                historyList.appendChild(chatItem);
+            });
+
+            // 添加通知按钮到历史列表底部
+            addHistoryNotificationButton(historyList);
+
+            // 如果有会话记录，且当前消息区域为空，自动加载第一个会话
+            if (data.sessions.length > 0) {
+                const messageArea = document.getElementById('messageArea');
+                if (!messageArea.children.length) {
+                    await loadChatSession(data.sessions[0].filename);
+                }
+            }
+
+        } else {
+            console.error('获取聊天历史失败:', data.error);
+        }
+    } catch (error) {
+        console.error('加载聊天历史失败:', error);
+    }
+}
+
+// 添加历史列表底部通知功能
+function addHistoryNotificationButton(historyList) {
+    // 创建通知按钮
+    const notificationBtn = document.createElement('button');
+    notificationBtn.className = 'history-notification-btn';
+    notificationBtn.innerHTML = '<i class="fas fa-bell"></i>公告与赞助';
+    historyList.appendChild(notificationBtn);
+
+    // 如果弹窗已存在，先移除
+    const existingModal = document.querySelector('.history-notification-modal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+
+    // 创建通知弹窗
+    const modalHtml = `
+        <div class="history-notification-modal">
+            <div class="history-notification-content">
+                <div class="history-notification-header">
+                    <h3><i class="fas fa-bell"></i>欢迎使用【改洺_开发的N网AI助手v1.0.1版本】</h3>
+                    <button class="history-notification-close">&times;</button>
+                </div>
+                <div class="history-notification-body">
+                    <div class="history-notification-text">
+                        <p>1、这个项目能做到什么程度完全看各位的支持了！！！</p>
+                        <p>2、之后的计划是 完成配套的管理器、自动更新mod、一键自动安装mod、自动检测冲突、搜索相似性mod、接入搜索引擎</p>
+                        <p>3、访问我的b站空间了解最新信息：<a href="https://space.bilibili.com/18718286" target="_blank">点击访问</a> 作者：b站up改洺_</p>
+                        <p>4、🌟【更新与发布地址：】<a href="https://kdocs.cn/l/ck4sKeHQ48Wm" target="_blank">点击访问</a></p>
+                        <p>5、感谢所有的MOD制作们，我们才有如此丰富多彩的MOD社区！</p>
+                        <p>6、---------------如果您喜欢期待(✧∀✧)您的一键三连！！！----------------</p>
+                    </div>
+                    <div class="sponsor-images">
+                        <h3>
+                            一键三连
+                            <button class="toggle-images" title="显示/隐藏赞赏码">
+                                <span class="eye-icon">👁️</span>
+                                <span class="closed-eye-icon" style="display: none;">😌</span>
+                            </button>
+                        </h3>
+                        <div class="image-container">
+                            <img src="/static/uploads/images/wx.png" alt="微信赞赏码">
+                            <img src="/static/uploads/images/zfb.jpg" alt="支付宝赞赏码">
+                            <img src="/static/uploads/images/gm.png" alt="改洺_">
+                        </div>
+                    </div>
+                </div>
+                <div class="history-notification-footer">
+                    <button class="history-notification-btn-close">
+                        <i class="fas fa-check"></i>
+                        我知道了
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 添加弹窗到body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    const modal = document.querySelector('.history-notification-modal');
+    const closeBtn = modal.querySelector('.history-notification-close');
+    const confirmBtn = modal.querySelector('.history-notification-btn-close');
+    const toggleImagesBtn = modal.querySelector('.toggle-images');
+    const imageContainer = modal.querySelector('.image-container');
+    const eyeIcon = toggleImagesBtn.querySelector('.eye-icon');
+    const closedEyeIcon = toggleImagesBtn.querySelector('.closed-eye-icon');
+
+    // 从本地存储获取图片显示状态
+    const imagesHidden = localStorage.getItem('sponsorImagesHidden') === 'true';
+
+    // 根据存储的状态设置初始显示
+    if (!imagesHidden) {
+        imageContainer.style.display = 'flex';
+        eyeIcon.style.display = 'inline';
+        closedEyeIcon.style.display = 'none';
+    } else {
+        imageContainer.style.display = 'none';
+        eyeIcon.style.display = 'none';
+        closedEyeIcon.style.display = 'inline';
+    }
+
+    // 切换图片显示状态
+    toggleImagesBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        const isVisible = imageContainer.style.display === 'flex';
+        
+        if (isVisible) {
+            imageContainer.style.display = 'none';
+            eyeIcon.style.display = 'none';
+            closedEyeIcon.style.display = 'inline';
+        } else {
+            imageContainer.style.display = 'flex';
+            eyeIcon.style.display = 'inline';
+            closedEyeIcon.style.display = 'none';
+        }
+        
+        localStorage.setItem('sponsorImagesHidden', isVisible);
+    });
+
+    // 显示弹窗
+    function showModal() {
+        modal.classList.add('show');
+    }
+
+    // 关闭弹窗
+    function closeModal() {
+        modal.classList.remove('show');
+        // 设置通知已显示的标记
+        localStorage.setItem('notificationShown', 'true');
+    }
+
+    // 点击通知按钮显示弹窗
+    notificationBtn.addEventListener('click', showModal);
+
+    // 点击关闭按钮关闭弹窗
+    closeBtn.addEventListener('click', closeModal);
+    confirmBtn.addEventListener('click', closeModal);
+
+    // 点击弹窗外部关闭
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+
+    // 检查是否首次访问
+    const notificationShown = localStorage.getItem('notificationShown');
+    
+    // 如果是首次访问，显示弹窗
+    if (!notificationShown) {
+        showModal();
+    }
+
+    // 创建图片预览模态框
+    const previewModalHtml = `
+        <div class="image-preview-modal">
+            <div class="image-preview-content">
+                <button class="image-preview-close">&times;</button>
+                <img src="" alt="">
+            </div>
+        </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', previewModalHtml);
+
+    const previewModal = document.querySelector('.image-preview-modal');
+    const previewImage = previewModal.querySelector('img');
+    const previewClose = previewModal.querySelector('.image-preview-close');
+
+    // 添加图片点击事件
+    imageContainer.querySelectorAll('img').forEach(img => {
+        img.addEventListener('click', function() {
+            previewImage.src = this.src;
+            previewImage.alt = this.alt;
+            previewModal.classList.add('show');
+        });
+    });
+
+    // 关闭预览
+    function closePreview() {
+        previewModal.classList.remove('show');
+    }
+
+    previewClose.addEventListener('click', closePreview);
+    previewModal.addEventListener('click', function(e) {
+        if (e.target === this) {
+            closePreview();
+        }
+    });
+
+    // ESC键关闭预览
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && previewModal.classList.contains('show')) {
+            closePreview();
+        }
+    });
+}
+
+// 创建聊天历史项
+function createChatHistoryItem(session) {
+    const item = document.createElement('div');
+    item.className = 'chat-history-item';
+    if (session.is_current) {
+        item.classList.add('active');
+    }
+    
+    // 格式化日期显示
+    const formattedDate = formatTime(session.modified_time * 1000);
+    
+    item.innerHTML = `
+        <div class="chat-preview" data-filename="${session.filename}">${session.preview || '新聊天'}</div>
+        <div class="chat-info">
+            <span class="chat-date">${session.date}</span>
+            <span class="chat-time">${formattedDate}</span>
+        </div>
+        <div class="chat-actions">
+            <button class="delete-chat-btn" title="删除会话" onclick="event.stopPropagation(); deleteChatSession('${session.filename}')">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    `;
+    
+    // 添加点击事件
+    item.addEventListener('click', () => loadChatSession(session.filename));
+    
+    return item;
+}
+
+// 加载特定聊天会话
+async function loadChatSession(filename) {
+    try {
+        // 先切换会话
+        const switchResponse = await fetch('/api/switch-chat-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ filename })
+        });
+        
+        if (!switchResponse.ok) {
+            throw new Error('切换会话失败');
+        }
+
+        // 然后加载会话内容
+        const response = await fetch(`/api/load-chat?filename=${filename}`);
+        const data = await response.json();
+        
+        if (data.success) {
+            // 重置消息区域
+            const messageArea = resetMessageArea();
+            
+            // 渲染消息
+            if (data.messages && data.messages.length > 0) {
+                data.messages.forEach(message => {
+                    if (message.role === 'user') {
+                        renderUserMessage(message);
+                    } else if (message.role === 'assistant') {
+                        renderAIMessage(message);
+                    }
+                });
+            }
+            
+            // 更新活动状态
+            updateActiveHistoryItem(filename);
+            
+            // 更新空状态显示
+            handleEmptyState();
+            
+            // 滚动到底部
+            messageArea.scrollTop = messageArea.scrollHeight;
+        }
+    } catch (error) {
+        console.error('加载聊天会话失败:', error);
+        NotificationManager.error('加载聊天会话失败');
+    }
+}
+
+// 更新活动的历史记录项
+function updateActiveHistoryItem(filename) {
+    const items = document.querySelectorAll('.chat-history-item');
+    items.forEach(item => {
+        item.classList.remove('active');
+        const preview = item.querySelector('.chat-preview');
+        if (preview && preview.getAttribute('data-filename') === filename) {
+            item.classList.add('active');
+        }
+    });
+}
+
+// 删除聊天会话
+async function deleteChatSession(filename) {
+    if (!confirm('确定要删除这个聊天会话吗？')) {
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/delete-chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ filename })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            NotificationManager.success('聊天会话已删除');
+            // 重新加载聊天历史列表
+            await loadChatHistoryList();
+            
+            // 如果删除的是当前会话，加载新的当前会话
+            if (data.current_file) {
+                await loadChatSession(data.current_file);
+            }
+        } else {
+            NotificationManager.error('删除聊天会话失败');
+        }
+    } catch (error) {
+        console.error('删除聊天会话失败:', error);
+        NotificationManager.error('删除聊天会话失败');
+    }
+}
+
+// 新建聊天功能
+async function newChat() {
+    try {
+        const response = await fetch('/api/clear-chat-history', {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            // 重置消息区域
+            resetMessageArea();
+            
+            // 重新加载聊天历史列表
+            await loadChatHistoryList();
+            
+            // 加载新创建的会话
+            if (data.filename) {
+                await loadChatSession(data.filename);
+            }
+            
+            // 更新空状态显示
+            handleEmptyState();
+            
+            NotificationManager.success('新的聊天会话已创建');
+        } else {
+            NotificationManager.error('创建新聊天会话失败');
+        }
+    } catch (error) {
+        console.error('新建聊天失败:', error);
+        NotificationManager.error('创建新聊天会话失败');
+    }
+}
+
+// 渲染用户消息
+function renderUserMessage(message) {
+    const userDiv = document.createElement('div');
+    userDiv.className = 'message user-container';
+    
+    const timestamp = document.createElement('div');
+    timestamp.className = 'message-timestamp';
+    timestamp.textContent = formatTimestamp(message.timestamp);
+    userDiv.appendChild(timestamp);
+    
+    const userAvatar = document.createElement('div');
+    userAvatar.className = 'avatar user';
+    const cachedUserAvatar = localStorage.getItem('userAvatar');
+    if (cachedUserAvatar) {
+        userAvatar.classList.add('custom-avatar');
+        userAvatar.classList.remove('default-avatar');
+    } else {
+        userAvatar.classList.remove('custom-avatar');
+        userAvatar.classList.add('default-avatar');
+        userAvatar.textContent = 'U';
+    }
+    
+    // 添加头像点击事件
+    initAvatarUpload(userAvatar);
+    
+    userDiv.appendChild(userAvatar);
+    
+    const userContent = document.createElement('div');
+    userContent.className = 'user-message';
+    userContent.textContent = message.content;
+    userDiv.appendChild(userContent);
+    
+    document.getElementById('messageArea').appendChild(userDiv);
+}
+
+// 渲染AI消息
+function renderAIMessage(message) {
+    const aiDiv = document.createElement('div');
+    aiDiv.className = 'message';
+    
+    const timestamp = document.createElement('div');
+    timestamp.className = 'message-timestamp';
+    timestamp.textContent = formatTimestamp(message.timestamp);
+    aiDiv.appendChild(timestamp);
+    
+    const aiAvatar = document.createElement('div');
+    aiAvatar.className = 'avatar ai';
+    const cachedAiAvatar = localStorage.getItem('aiAvatar');
+    if (cachedAiAvatar) {
+        aiAvatar.classList.add('custom-avatar');
+        aiAvatar.classList.remove('default-avatar');
+    } else {
+        aiAvatar.classList.remove('custom-avatar');
+        aiAvatar.classList.add('default-avatar');
+    }
+    
+    // 添加头像点击事件
+    initAvatarUpload(aiAvatar);
+    
+    aiDiv.appendChild(aiAvatar);
+    
+    const aiContent = document.createElement('div');
+    aiContent.className = 'ai-message';
+    renderMessageContent(message.content, aiContent);
+    aiDiv.appendChild(aiContent);
+    
+    document.getElementById('messageArea').appendChild(aiDiv);
+}
+
+// 在初始化时加载聊天历史
+document.addEventListener('DOMContentLoaded', function() {
+    // ... existing initialization code ...
+    
+    // 加载聊天历史列表
+    loadChatHistoryList();
+});
+
+
+// 聊天历史侧边栏切换功能
+document.addEventListener('DOMContentLoaded', () => {
+    const historyToggle = document.getElementById('historyToggle');
+    const historySidebar = document.querySelector('.chat-history-sidebar');
+
+    if (historyToggle && historySidebar) {
+        historyToggle.addEventListener('click', () => {
+            historySidebar.classList.toggle('collapsed');
+        });
+
+        // 双击历史记录头部也可以切换
+        const historyHeader = document.querySelector('.chat-history-header');
+        if (historyHeader) {
+            historyHeader.addEventListener('dblclick', () => {
+                historySidebar.classList.toggle('collapsed');
+            });
+        }
+    }
+});
+
+// 获取并更新在线人数
+function updateOnlineCount() {
+    fetch('/get_ip_count')
+        .then(response => response.json())
+        .then(data => {
+            const count = data.data || 0;
+            document.getElementById('ai-online-count').innerHTML = `
+                <i class="fas fa-users"></i>
+                <span>${count} 人在线</span>
+            `;
+        })
+        .catch(error => {
+            console.error('获取在线人数失败:', error);
+            document.getElementById('ai-online-count').innerHTML = `
+                <i class="fas fa-exclamation-circle"></i>
+                <span>获取失败</span>
+            `;
+        });
+}
+
+
+
+// 检查初始化状态的函数
+function checkInitialization() {
+    $.ajax({
+        url: '/ist_init',
+        type: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify({ sys_version: 'v1.0.1' }),
+
+        success: function (response) {
+            if (!response.success) {
+                // 处理消息中的URL
+                const message = convertMessageToHtml(response.message);
+
+                const modalHtml = `
+                    <div id="init-error-modal" style="display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                        background: rgba(0, 0, 0, 0.8); z-index: 2000; justify-content: center; align-items: center;">
+                        <div style="background: #0a2342; padding: 20px; border-radius: 5px; max-width: 80%; text-align: center; position: relative;">
+                          
+                            <h3 style="color: #3498db;">系统提醒</h3>
+                            <p style="margin: 20px 0; color: #fff;">${message}</p>
+                          
+                        </div>
+                    </div>
+                `;
+
+                $('#init-error-modal').remove();
+                $('body').append(modalHtml);
+
+                $('.close-modal-btn, .confirm-btn').on('click', function () {
+                    $('#init-error-modal').remove();
+                });
+            }
+        },
+        error: function (error) {
+            // 处理错误消息中的URL
+            const message = convertMessageToHtml(error.responseJSON?.message || error.message || '未知错误');
+
+            const modalHtml = `
+                <div id="init-error-modal" style="display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                    background: rgba(0, 0, 0, 0.8); z-index: 2000; justify-content: center; align-items: center;">
+                    <div style="background: #0a2342; padding: 20px; border-radius: 5px; max-width: 80%; text-align: center; position: relative;">
+                        <h3 style="color: #3498db;">系统提醒</h3>
+                        <p style="margin: 20px 0; color: #fff;">${message}</p>
+                     
+                    </div>
+                </div>
+            `;
+
+            $('#init-error-modal').remove();
+            $('body').append(modalHtml);
+
+            $('.close-modal-btn, .confirm-btn').on('click', function () {
+                $('#init-error-modal').remove();
+            });
+        }
+    });
+}
+
+// 将消息中的URL转换为HTML链接的函数
+function convertMessageToHtml(message) {
+    if (!message) return '';
+
+    // URL匹配正则表达式
+    const urlRegex = /(https?:\/\/[^\s<]+[^<.,:;"')\]\s])/g;
+
+    // 将URL转换为可点击的链接
+    return message.replace(urlRegex, function (url) {
+        return `<a href="${url}" target="_blank" style="color: #3498db; text-decoration: underline; cursor: pointer;">${url}</a>`;
+    });
+}
+
+// 页面加载时获取在线人数，并每30秒更新一次
+document.addEventListener('DOMContentLoaded', function() {
+    // ... existing initialization code ...
+    
+    // 初始获取在线人数
+    updateOnlineCount();
+    
+    // 每30秒更新一次在线人数
+    setInterval(updateOnlineCount, 30000);
+    // 检查初始化状态
+    checkInitialization();
+});
+
+// 添加搜索按键处理函数
+function handleSearchKeyPress(e) {
+    console.log('按键被按下:', e.key);  // 调试日志
+    if (e.key === 'Enter') {
+        console.log('回车键被按下，开始搜索...');  // 调试日志
+        e.preventDefault();
+        loadGames(true);
+    }
+}
+
+// 禁用聊天历史切换功能
+function disableChatHistorySwitch() {
+    const historyItems = document.querySelectorAll('.chat-history-item');
+    historyItems.forEach(item => {
+        item.style.pointerEvents = 'none';
+        item.style.opacity = '0.5';
+        item.style.cursor = 'not-allowed';
+        
+        // 禁用删除按钮
+        const deleteBtn = item.querySelector('.delete-chat-btn');
+        if (deleteBtn) {
+            deleteBtn.disabled = true;
+            deleteBtn.style.pointerEvents = 'none';
+            deleteBtn.style.opacity = '0.5';
+        }
+    });
+    
+    // 禁用新建聊天按钮
+    const newChatBtn = document.querySelector('.new-chat-button');
+    if (newChatBtn) {
+        newChatBtn.disabled = true;
+        newChatBtn.style.pointerEvents = 'none';
+        newChatBtn.style.opacity = '0.5';
+    }
+}
+
+// 恢复聊天历史切换功能
+function enableChatHistorySwitch() {
+    console.log('恢复聊天历史切换功能');
+    const historyItems = document.querySelectorAll('.chat-history-item');
+    historyItems.forEach(item => {
+        item.style.pointerEvents = 'auto';
+        item.style.opacity = '1';
+        item.style.cursor = 'pointer';
+        
+        // 恢复删除按钮
+        const deleteBtn = item.querySelector('.delete-chat-btn');
+        if (deleteBtn) {
+            deleteBtn.disabled = false;
+            deleteBtn.style.pointerEvents = 'auto';
+            deleteBtn.style.opacity = '1';
+        }
+    });
+    
+    // 恢复新建聊天按钮
+    const newChatBtn = document.querySelector('.new-chat-button');
+    if (newChatBtn) {
+        newChatBtn.disabled = false;
+        newChatBtn.style.pointerEvents = 'auto';
+        newChatBtn.style.opacity = '1';
+    }
+}
+
+// 添加滚动事件监听器
+document.addEventListener('DOMContentLoaded', function() {
+    const messageArea = document.getElementById('messageArea');
+    if (messageArea) {
+        messageArea.addEventListener('wheel', function() {
+            userHasScrolled = true;
+            // 检查是否滚动到底部
+            const isAtBottom = messageArea.scrollHeight - messageArea.scrollTop - messageArea.clientHeight < 10;
+            if (isAtBottom) {
+                userHasScrolled = false;
+            }
+        });
+        
+        // 监听触摸滚动
+        messageArea.addEventListener('touchmove', function() {
+            userHasScrolled = true;
+        });
+        
+        messageArea.addEventListener('touchend', function() {
+            // 检查是否滚动到底部
+            const isAtBottom = messageArea.scrollHeight - messageArea.scrollTop - messageArea.clientHeight < 10;
+            if (isAtBottom) {
+                userHasScrolled = false;
+            }
+        });
+    }
+});
+
+// 加载游戏列表
+async function loadGames(isSearch = false) {
+    if (isLoading || (!hasMoreGames && !isSearch)) return;
+    
+    isLoading = true;
+    const gamesGrid = document.getElementById('gamesGrid');
+    
+    if (isSearch) {
+        currentPage = 1;
+    }
+    
+    // 创建骨架屏效果
+    gamesGrid.innerHTML = Array(5).fill(`
+        <div class="game-card skeleton">
+            <div class="skeleton-image"></div>
+            <div class="skeleton-info">
+                <div class="skeleton-name"></div>
+                <div class="skeleton-stats">
+                    <div class="skeleton-stat"></div>
+                    <div class="skeleton-stat"></div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    try {
+        const searchQuery = document.getElementById('gameSearchInput').value;
+        const response = await fetch(`/api/search-games?page=${currentPage}&game_name=${encodeURIComponent(searchQuery)}&page_size=${pageSize}`);
+        const data = await response.json();
+
+        gamesGrid.innerHTML = '';
+
+        if (data.success) {
+            const { games, pagination } = data.data;
+            totalPages = pagination.total_pages;
+            
+            if (games.length === 0) {
+                gamesGrid.innerHTML = '<div class="no-games-message">没有找到相关游戏</div>';
+            } else {
+                // 使用Promise.all等待所有游戏卡片创建完成
+                const gameCards = await Promise.all(games.map(game => createGameCard(game)));
+                gameCards.forEach(card => gamesGrid.appendChild(card));
+            }
+
+            // 更新分页组件
+            updatePagination(pagination.current_page, pagination.total_pages, pagination.total_count);
+        } else {
+            NotificationManager.error('加载游戏列表失败');
+        }
+    } catch (error) {
+        console.error('加载游戏失败:', error);
+        NotificationManager.error('加载游戏列表失败');
+    } finally {
+        isLoading = false;
+    }
+}
+// 用于在页面加载完成后检查空状态
+window.addEventListener('load', function() {
+    setTimeout(() => {
+        if (typeof handleEmptyState === 'function') {
+            handleEmptyState();
+        }
+    }, 500);
+});
+

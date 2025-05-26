@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "Nexus Mods 直链工具",
+  "version": "1.0",
+  "description": "自动在 Nexus Mods 页面显示模组直链",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "cookies",
+    "storage",
+    "commands",
+    "clipboardWrite",
+    "windows"
+  ],
+  "host_permissions": [
+    "https://www.nexusmods.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "/icons/icon16.png",
+      "48": "/icons/icon48.png",
+      "128": "/icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "/icons/icon16.png",
+    "48": "/icons/icon48.png",
+    "128": "/icons/icon128.png"
+  },
+  "commands": {
+    "toggle-parsing": {
+      "suggested_key": {
+        "default": "Ctrl+X",
+        "mac": "Command+X"
+      },
+      "description": "开始/暂停解析直链"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.nexusmods.com/*/mods/*",
+        "https://www.nexusmods.com/games/*",
+        "https://www.nexusmods.com/games/*/mods*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "images/*",
+        "static/*",
+        "chat.html",
+        "chat.js",
+        "ai-mod-analyzer.js"
+      ],
+      "matches": ["https://www.nexusmods.com/*"]
+    }
+  ]
+} 
