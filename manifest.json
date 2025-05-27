@@ -10,10 +10,12 @@
     "storage",
     "commands",
     "clipboardWrite",
-    "windows"
+    "windows",
+    "webRequest"
   ],
   "host_permissions": [
-    "https://www.nexusmods.com/*"
+    "https://www.nexusmods.com/*",
+    "https://users.nexusmods.com/*"
   ],
   "action": {
     "default_popup": "popup.html",

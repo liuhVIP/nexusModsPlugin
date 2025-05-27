@@ -456,6 +456,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (isModDescriptionPage(window.location.href)) {
       initAIAnalyzer();
     }
+  } else if (request.action === 'authStatusChanged') {
+    // 更新页面上的授权状态显示
+    const authStatusDiv = document.querySelector('.auth-status');
+    if (authStatusDiv) {
+      if (request.isAuthorized) {
+        authStatusDiv.className = 'auth-status success';
+        authStatusDiv.innerHTML = `
+          <img src="static/success.png" alt="已授权" class="auth-status-icon">
+          <span>已获取N网授权</span>
+        `;
+      } else {
+        authStatusDiv.className = 'auth-status error';
+        authStatusDiv.innerHTML = `
+          <img src="static/error.png" alt="未授权" class="auth-status-icon">
+          <span>无法获取到N网授权，请先登录</span>
+        `;
+      }
+    }
   }
 });
 
@@ -491,10 +509,14 @@ async function handleModUrlDetected(modInfo) {
         saveDirectLinksToCache(modInfo.gameName, modInfo.modId, response.downloadUrls, fullUrl);
         displayAllDirectLinks(response.downloadUrls);
       } else {
+        // 获取直链失败，清除授权缓存
+        chrome.runtime.sendMessage({ action: "clearAuthStatus" });
         displayDirectLinkError(response.error || "获取下载链接失败");
       }
     });
   } catch (error) {
+    // 发生错误时也清除授权缓存
+    chrome.runtime.sendMessage({ action: "clearAuthStatus" });
     displayDirectLinkError(error.message);
   }
 }
@@ -1374,11 +1396,15 @@ function handleControlPanelTable() {
                     saveDirectLinksToCache(modInfo.gameName, modInfo.modId, response.downloadUrls, fullUrl);
                     displayAllDirectLinks(response.downloadUrls);
                 } else {
+                    // 获取直链失败，清除授权缓存
+                    chrome.runtime.sendMessage({ action: "clearAuthStatus" });
                     displayDirectLinkError(response.error || "获取下载链接失败");
                 }
             });
         } catch (error) {
             console.error('处理直链时出错:', error);
+            // 发生错误时也清除授权缓存
+            chrome.runtime.sendMessage({ action: "clearAuthStatus" });
             displayDirectLinkError(error.message);
         }
     };

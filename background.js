@@ -322,6 +322,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       sendResponse({ success: true });
       return true; // 保持消息通道开放
     }
+
+    if (request.action === "clearAuthStatus") {
+      chrome.storage.local.remove('nexusAuthStatus');
+    }
   });
 
   // 监听窗口关闭事件
@@ -351,6 +355,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     }
   });
+    // 添加网络请求监听器
+    chrome.webRequest.onBeforeRequest.addListener(
+      function(details) {
+        // 检查是否是退出登录的URL
+        if (details.url === 'https://users.nexusmods.com/auth/sign_out') {
+          console.log('检测到用户退出登录');
+          // 清除授权缓存
+          chrome.storage.local.remove('nexusAuthStatus');
+          
+          // 通知所有打开的标签页更新授权状态
+          chrome.tabs.query({}, (tabs) => {
+            tabs.forEach(tab => {
+              if (tab.url.includes('nexusmods.com')) {
+                chrome.tabs.sendMessage(tab.id, { 
+                  action: 'authStatusChanged',
+                  isAuthorized: false 
+                }).catch(() => {
+                  // 忽略发送失败的错误（可能标签页没有我们的content script）
+                });
+              }
+            });
+          });
+        }
+      },
+      {
+        urls: ['https://users.nexusmods.com/auth/sign_out']
+      }
+    );
 });
 
 // 创建新聊天窗口的函数

@@ -26,6 +26,15 @@ const PAGE_TIPS = {
   [PAGE_TYPE.OTHER]: '',
 };
 
+// 添加授权相关的常量
+const AUTH = {
+  TEST_MOD_ID: '107',
+  TEST_FILE_ID: '99133',
+  GAME_NAME: "cyberpunk2077",// 使用固定的游戏名称
+  CACHE_KEY: 'nexusAuthStatus',
+  CACHE_EXPIRATION: 30 * 60 * 1000 // 30分钟的毫秒数
+};
+
 // 刷新当前标签页
 function reloadCurrentTab() {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -125,181 +134,95 @@ function loadAdvancedSettings() {
   });
 }
 
-// 检查授权状态
+// 添加授权状态检查函数
 async function checkAuthStatus() {
   const authStatusDiv = document.getElementById('authStatus');
-  // 获取当前激活标签页
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const url = tabs[0] ? tabs[0].url : '';
-    const pageType = getCurrentPageType(url);
-    if (pageType !== PAGE_TYPE.DETAIL) {
-      // 非详情页，隐藏或清空授权状态区域
-      authStatusDiv.className = 'auth-status';
-      authStatusDiv.innerHTML = '';
-      return;
-    }
-    // 详情页才检查授权
-    if (tabs[0] && url.includes('nexusmods.com') && url.includes('/mods/')) {
-      try {
-        const urlObj = new URL(url);
-        const pathParts = urlObj.pathname.split('/').filter(Boolean);
-        if (pathParts.length < 3 || pathParts[1] !== 'mods') {
-          throw new Error('URL 结构不正确');
-        }
-        const gameName = pathParts[0];
-        const modId = pathParts[2];
-        chrome.runtime.sendMessage({
-          action: "getAllDownloadUrls",
-          modId,
-          gameName
-        }, (response) => {
-          if (chrome.runtime.lastError || !response || !response.success || !response.downloadUrls || response.downloadUrls.length === 0) {
-            authStatusDiv.className = 'auth-status error';
-            authStatusDiv.innerHTML = `
-              <img src="static/error.png" alt="未授权" class="auth-status-icon">
-              <span>无法获取到N网授权，请先登录</span>
-            `;
-          } else {
-            authStatusDiv.className = 'auth-status success';
-            authStatusDiv.innerHTML = `
-              <img src="static/success.png" alt="已授权" class="auth-status-icon">
-              <span>已获取N网授权</span>
-            `;
-          }
-        });
-      } catch (e) {
-        authStatusDiv.className = 'auth-status error';
-        authStatusDiv.innerHTML = `
-          <img src="static/error.png" alt="未授权" class="auth-status-icon">
-          <span>无法获取到N网授权，请先登录</span>
-        `;
+  
+  // 先检查缓存中的授权状态
+  const cachedAuth = await getCachedAuthStatus();
+  if (cachedAuth) {
+    updateAuthStatusDisplay(authStatusDiv, true);
+    return;
+  }
+  
+  // 如果没有缓存或缓存已过期，进行新的授权检查
+  try {
+    // 发送消息给background.js获取测试下载链接
+    chrome.runtime.sendMessage({
+      action: "getAllDownloadUrls",
+      modId: AUTH.TEST_MOD_ID,
+      gameName: AUTH.GAME_NAME 
+    }, (response) => {
+      if (response.success && response.downloadUrls && response.downloadUrls.length > 0) {
+        // 授权成功，更新缓存
+        saveAuthStatusToCache(true);
+        updateAuthStatusDisplay(authStatusDiv, true);
+      } else {
+        // 授权失败，清除缓存
+        clearAuthStatusCache();
+        updateAuthStatusDisplay(authStatusDiv, false);
       }
+    });
+  } catch (error) {
+    clearAuthStatusCache();
+    updateAuthStatusDisplay(authStatusDiv, false);
+  }
+}
+
+// 获取缓存的授权状态
+function getCachedAuthStatus() {
+  return new Promise((resolve) => {
+    chrome.storage.local.get([AUTH.CACHE_KEY], (result) => {
+      if (result[AUTH.CACHE_KEY]) {
+        const { isAuthorized, timestamp } = result[AUTH.CACHE_KEY];
+        const now = Date.now();
+        
+        // 检查缓存是否过期
+        if (now - timestamp < AUTH.CACHE_EXPIRATION) {
+          resolve(isAuthorized);
+        } else {
+          // 缓存已过期，清除它
+          clearAuthStatusCache();
+          resolve(null);
+        }
+      } else {
+        resolve(null);
+      }
+    });
+  });
+}
+
+// 保存授权状态到缓存
+function saveAuthStatusToCache(isAuthorized) {
+  chrome.storage.local.set({
+    [AUTH.CACHE_KEY]: {
+      isAuthorized,
+      timestamp: Date.now()
     }
   });
 }
 
-// 复制文本到剪贴板
-const copyToClipboard = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch (err) {
-    console.error('复制失败:', err);
-    return false;
-  }
-};
+// 清除授权状态缓存
+function clearAuthStatusCache() {
+  chrome.storage.local.remove(AUTH.CACHE_KEY);
+}
 
-// 只生成tbody内容
-const createLinksTableBody = (downloadUrls) => {
-  const fragment = document.createDocumentFragment();
-  downloadUrls.forEach((item, index) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${index + 1}</td>
-      <td class="link-cell" data-full-url="${item.url}">${item.url}</td>
-      <td>
-        <button class="action-button copy-button" data-url="${item.url}" title="复制链接">
-          <img src="static/copy.png" alt="复制">
-        </button>
-        <a href="${item.url}" target="_blank" class="action-button download-button" title="下载">
-          <img src="static/download.png" alt="下载">
-        </a>
-      </td>
+// 更新授权状态显示
+function updateAuthStatusDisplay(authStatusDiv, isAuthorized) {
+  if (isAuthorized) {
+    authStatusDiv.className = 'auth-status success';
+    authStatusDiv.innerHTML = `
+      <img src="static/success.png" alt="已授权" class="auth-status-icon">
+      <span>已获取N网授权</span>
     `;
-    fragment.appendChild(tr);
-  });
-  return fragment;
-};
-
-// 创建复制全部按钮
-const createCopyAllButton = (downloadUrls) => {
-  const button = document.createElement('button');
-  button.className = 'copy-all-button';
-  button.innerHTML = `
-    <img src="static/copy-all.png" alt="复制全部">
-    复制全部链接
-  `;
-  
-  button.addEventListener('click', async () => {
-    const allUrls = downloadUrls.map(item => item.url).join('\n');
-    const success = await copyToClipboard(allUrls);
-    if (success) {
-      const originalText = button.innerHTML;
-      button.innerHTML = `
-        <img src="static/success.png" alt="已复制">
-        已复制全部
-      `;
-      button.style.backgroundColor = '#4caf50';
-      button.style.color = 'white';
-      setTimeout(() => {
-        button.innerHTML = originalText;
-        button.style.backgroundColor = '';
-        button.style.color = '';
-      }, 1500);
-    }
-  });
-  
-  const container = document.getElementById('copyAllBtnContainer');
-  if (container) {
-    container.innerHTML = '';
-    container.appendChild(button);
-  }
-};
-
-// 创建表格
-const createLinksTable = (downloadUrls) => {
-  const table = document.createElement('table');
-  table.className = 'links-table';
-  
-  // 创建表头
-  const thead = document.createElement('thead');
-  thead.innerHTML = `
-    <tr>
-      <th style="width: 25px">序号</th>
-      <th>链接</th>
-      <th style="width: 120px">操作</th>
-    </tr>
-  `;
-  table.appendChild(thead);
-
-  // 创建表体
-  const tbody = document.createElement('tbody');
-  downloadUrls.forEach((item, index) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${index + 1}</td>
-      <td class="link-cell" data-full-url="${item.url}">${item.url}</td>
-      <td>
-        <button class="action-button copy-button" data-url="${item.url}" title="复制链接">
-          <img src="static/copy.png" alt="复制">
-        </button>
-        <a href="${item.url}" target="_blank" class="action-button download-button" title="下载">
-          <img src="static/download.png" alt="下载">
-        </a>
-      </td>
+  } else {
+    authStatusDiv.className = 'auth-status error';
+    authStatusDiv.innerHTML = `
+      <img src="static/error.png" alt="未授权" class="auth-status-icon">
+      <span>无法获取到N网授权，请先登录</span>
     `;
-    tbody.appendChild(tr);
-  });
-  table.appendChild(tbody);
-
-  // 添加复制按钮事件监听
-  table.querySelectorAll('.copy-button').forEach(button => {
-    button.addEventListener('click', async (e) => {
-      const url = e.target.closest('.copy-button').dataset.url;
-      const success = await copyToClipboard(url);
-      if (success) {
-        const img = e.target.closest('.copy-button').querySelector('img');
-        const originalSrc = img.src;
-        img.src = 'static/success.png';
-        setTimeout(() => {
-          img.src = originalSrc;
-        }, 1500);
-      }
-    });
-  });
-
-  return table;
-};
+  }
+}
 
 // 页面类型判断函数
 function getCurrentPageType(url) {
@@ -510,22 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
           statusDiv.textContent = STATUS_MESSAGES.SUCCESS;
           statusDiv.className = 'status-success';
 
-          // 修改开始：按钮和表格都插入 directLink，按钮在上表格在下
-          const directLinkContainer = document.getElementById('directLink');
-          if (directLinkContainer) {
-            directLinkContainer.innerHTML = '';
-            // 创建并插入按钮容器
-            const copyAllBtnContainer = document.createElement('div');
-            copyAllBtnContainer.id = 'copyAllBtnContainer';
-            directLinkContainer.appendChild(copyAllBtnContainer);
-            createCopyAllButton(response.downloadUrls); // 这会把按钮插入到 copyAllBtnContainer
-            // 创建并插入表格
-            const tableElement = createLinksTable(response.downloadUrls);
-            directLinkContainer.appendChild(tableElement);
-          } else {
-            console.error("无法找到ID为 'directLink' 的容器来展示表格。");
-          }
-          // 修改结束
+         
 
         } else {
           statusDiv.textContent = STATUS_MESSAGES.ERROR_CANNOT_GET_LINK;
