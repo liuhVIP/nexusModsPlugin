@@ -4,7 +4,6 @@ const CONTAINER_CLASS = 'nexus-direct-link-container';
 const STORAGE_KEYS = {
   STANDARD_URL_ENABLED: 'standardUrlEnabled',
   GAME_LIST_URL_ENABLED: 'gameListUrlEnabled',
-  MAX_CONCURRENT_REQUESTS: 'maxConcurrentRequests',
   REQUEST_DELAY: 'requestDelay'
 };
 
@@ -14,7 +13,7 @@ const STYLES = {
     margin: 10px 0;
     padding: 8px;
     background-color: #f8f9fa;
-    border-radius: 8px;
+    border-radius: 4px;
     font-size: 14px;
   `,
   LOADING: `
@@ -107,12 +106,18 @@ const parsedLinksCache = new Map();
 const CACHE_STORAGE_KEY = 'parsedLinksCache';
 const CACHE_EXPIRATION_TIME = 12 * 60 * 60 * 1000; // 12小时的毫秒数
 
-// 添加全局计数器
+// 添加全局计数器 - 重构为更可靠的状态管理
 const globalCounters = {
   totalMods: 0,
   completedMods: 0,
   // 修改已处理模组ID的跟踪集合，使用gameName和modId的组合作为键
-  processedModIds: new Map() // 改用Map来存储，key为gameName，value为Set<modId>
+  processedModIds: new Map(), // 改用Map来存储，key为gameName，value为Set<modId>
+  // 添加已完成模组ID的跟踪集合
+  completedModIds: new Map(), // 改用Map来存储，key为gameName，value为Set<modId>
+  // 添加当前游戏名称跟踪
+  currentGameName: null,
+  // 添加页面状态跟踪
+  isPageInitialized: false
 };
 
 // 添加检查函数
@@ -144,19 +149,19 @@ function restoreParsedLinksCache() {
         try {
           const obj = JSON.parse(result[CACHE_STORAGE_KEY]);
           const now = Date.now();
-          
+
           // 清理过期的缓存
           Object.entries(obj).forEach(([key, value]) => {
             if (value.timestamp && (now - value.timestamp < CACHE_EXPIRATION_TIME)) {
               parsedLinksCache.set(key, value);
             }
           });
-          
+
           // 如果有过期的缓存，保存更新后的缓存
           if (Object.keys(obj).length !== parsedLinksCache.size) {
             saveParsedLinksCache();
           }
-          
+
           console.log('直链缓存已恢复');
         } catch (e) {
           console.warn('直链缓存恢复失败', e);
@@ -178,7 +183,7 @@ function saveParsedLinksCache() {
   parsedLinksCache.forEach((value, key) => {
     obj[key] = value;
   });
-  
+
   safeStorageOperation((resolve) => {
     chrome.storage.local.set({ [CACHE_STORAGE_KEY]: JSON.stringify(obj) }, resolve);
   });
@@ -193,9 +198,9 @@ function getCacheKey(gameName, modId) {
 function getDirectLinksFromCache(gameName, modId) {
   const cacheKey = getCacheKey(gameName, modId);
   const cachedData = parsedLinksCache.get(cacheKey);
-  
+
   if (!cachedData) return null;
-  
+
   // 检查缓存是否过期
   const now = Date.now();
   if (cachedData.timestamp && (now - cachedData.timestamp >= CACHE_EXPIRATION_TIME)) {
@@ -204,7 +209,7 @@ function getDirectLinksFromCache(gameName, modId) {
     saveParsedLinksCache();
     return null;
   }
-  
+
   return cachedData;
 }
 
@@ -217,6 +222,183 @@ function saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl) {
     timestamp: Date.now() // 添加时间戳
   });
   saveParsedLinksCache();
+}
+
+// 重置并同步进度计数器 - 修复分页问题版本（移除totalMods处理）
+function resetAndSyncCounters(gameName) {
+  console.log(`重置并同步计数器，游戏: ${gameName}`);
+
+  // 如果游戏名称发生变化，重置相关计数器
+  if (globalCounters.currentGameName !== gameName) {
+    console.log(`游戏名称变化: ${globalCounters.currentGameName} -> ${gameName}`);
+    globalCounters.completedMods = 0;
+    globalCounters.currentGameName = gameName;
+    globalCounters.isPageInitialized = false;
+  } else {
+    // 同一游戏内的分页切换，重置页面相关状态但保留已完成的模组记录
+    console.log(`同一游戏内的分页切换，重置页面状态`);
+    globalCounters.isPageInitialized = false;
+    // 不重置 completedMods，让它们根据缓存重新计算
+  }
+
+  // 确保当前游戏的集合存在
+  if (!globalCounters.processedModIds.has(gameName)) {
+    globalCounters.processedModIds.set(gameName, new Set());
+  }
+  if (!globalCounters.completedModIds.has(gameName)) {
+    globalCounters.completedModIds.set(gameName, new Set());
+  }
+}
+
+// 同步缓存状态到计数器 - 修复版本：同步所有缓存的模组，不仅仅是当前页面
+function syncCacheToCounters(gameName, modsData) {
+  console.log(`同步缓存状态到计数器，游戏: ${gameName}, 当前页面模组数量: ${modsData.length}`);
+
+  const completedSet = globalCounters.completedModIds.get(gameName);
+
+  // 清空现有的完成集合，重新从缓存中构建
+  completedSet.clear();
+
+  // 遍历所有缓存，找出该游戏的所有已缓存模组
+  let totalCachedCount = 0;
+  let currentPageCachedCount = 0;
+
+  parsedLinksCache.forEach((value, key) => {
+    if (key.startsWith(`${gameName}_`)) {
+      const modId = key.split('_')[1];
+      completedSet.add(modId);
+      totalCachedCount++;
+
+      // 检查是否是当前页面的模组
+      if (modsData.some(mod => mod.modId === modId)) {
+        currentPageCachedCount++;
+      }
+    }
+  });
+
+  // 重新计算完成数量
+  globalCounters.completedMods = completedSet.size;
+
+  console.log(`同步完成，当前页面缓存模组: ${currentPageCachedCount}, 总缓存模组: ${totalCachedCount}, 完成集合大小: ${globalCounters.completedMods}`);
+  return currentPageCachedCount;
+}
+
+// 统一更新进度条显示 - 修复版本：分别显示当前分页和总计进度
+function updateProgressDisplay(gameName, isCompleted = false) {
+  const progressContainer = document.querySelector('.nexus-progress-container');
+  if (!progressContainer) {
+    console.log('进度容器不存在，跳过更新');
+    return;
+  }
+
+  const textContainer = progressContainer.querySelector('.nexus-progress-text');
+  const spinner = progressContainer.querySelector('div[style*="border-radius: 50%"]');
+
+  if (!textContainer) {
+    console.log('进度文本容器不存在，跳过更新');
+    return;
+  }
+
+  // 确保计数器状态正确
+  if (!globalCounters.completedModIds.has(gameName)) {
+    globalCounters.completedModIds.set(gameName, new Set());
+  }
+
+  // 获取当前页面的实际模组数量和已完成数量
+  const currentPageMods = extractModIdsFromGameListPage();
+  const currentPageModCount = currentPageMods.length;
+
+  // 计算当前分页中已完成的模组数量 - 使用Set去重，避免重复统计
+  const currentPageCompletedModIds = new Set();
+  currentPageMods.forEach(mod => {
+    const cacheKey = getCacheKey(gameName, mod.modId);
+    if (parsedLinksCache.has(cacheKey)) {
+      currentPageCompletedModIds.add(mod.modId);
+    }
+  });
+  const currentPageCompletedCount = currentPageCompletedModIds.size;
+
+  // 获取总的已完成模组数量（跨所有分页）
+  const totalCompletedCount = globalCounters.completedModIds.get(gameName).size;
+
+  console.log(`更新进度显示: 当前分页 ${currentPageCompletedCount}/${currentPageModCount}, 总计 ${totalCompletedCount}, 强制完成: ${isCompleted}`);
+  console.log(`调试信息: 缓存大小=${parsedLinksCache.size}, 完成集合大小=${globalCounters.completedModIds.get(gameName)?.size || 0}`);
+  console.log(`当前分页已完成模组ID:`, Array.from(currentPageCompletedModIds));
+  console.log(`当前分页模组总数: ${currentPageMods.length}, 去重后完成数: ${currentPageCompletedCount}`);
+
+  // 修复完成判断逻辑：基于当前分页是否完成
+  const isCurrentPageCompleted = isCompleted ||
+    (currentPageModCount > 0 && currentPageCompletedCount === currentPageModCount);
+
+  console.log(`完成判断: 当前页模组${currentPageModCount}, 当前页完成${currentPageCompletedCount}, 总完成${totalCompletedCount}, 当前页是否完成: ${isCurrentPageCompleted}`);
+
+  // 构建进度显示文本：当前分页XX/40 总计XX
+  let progressText = '';
+  if (currentPageModCount > 0) {
+    progressText = `当前分页 ${currentPageCompletedCount}/${currentPageModCount}`;
+    // 总是显示总计数量
+    progressText += ` 总计 ${totalCompletedCount}`;
+  } else {
+    progressText = `总计 ${totalCompletedCount}`;
+  }
+
+  if (isCurrentPageCompleted && currentPageModCount > 0) {
+    // 当前分页已完成状态 - 优化显示文本
+    if (totalCompletedCount === currentPageCompletedCount) {
+      // 只有当前分页的模组，没有其他分页
+      textContainer.innerHTML = `当前分页已完成: 当前分页 ${currentPageCompletedCount}/${currentPageModCount}`;
+    } else {
+      // 有其他分页的模组
+      textContainer.innerHTML = `当前分页已完成: 当前分页 ${currentPageCompletedCount}/${currentPageModCount} 总计 ${totalCompletedCount}`;
+    }
+    if (spinner && spinner.parentNode) {
+      spinner.parentNode.removeChild(spinner);
+    }
+  } else if (!isParsingEnabled) {
+    // 暂停状态
+    textContainer.innerHTML = `获取直链已暂停: ${progressText}`;
+    if (spinner && spinner.parentNode) {
+      spinner.parentNode.removeChild(spinner);
+    }
+  } else {
+    // 进行中状态
+    textContainer.innerHTML = `正在获取链接: ${progressText}`;
+    // 如果没有加载动画且需要显示，添加一个
+    if (!spinner && isParsingEnabled) {
+      const progressRow = textContainer.parentNode;
+      if (progressRow) {
+        const newSpinner = createLoadingSpinner();
+        progressRow.insertBefore(newSpinner, textContainer);
+      }
+    }
+  }
+}
+
+// 简化页面导航处理 - 每次都重新开始
+function handlePageNavigation(gameName) {
+  console.log(`处理页面导航，游戏: ${gameName}, 当前URL: ${window.location.href}`);
+
+  // 简化逻辑：每次都重新开始，移除现有进度弹窗
+  const existingProgress = document.querySelector('.nexus-progress-container');
+  if (existingProgress) {
+    existingProgress.remove();
+    console.log('移除现有进度弹窗，准备重新开始');
+  }
+
+  // 重置状态（移除totalMods重置，因为我们现在直接使用当前页面数量）
+  globalCounters.completedMods = 0;
+  globalCounters.currentGameName = gameName;
+  globalCounters.isPageInitialized = false;
+
+  // 确保当前游戏的集合存在
+  if (!globalCounters.processedModIds.has(gameName)) {
+    globalCounters.processedModIds.set(gameName, new Set());
+  }
+  if (!globalCounters.completedModIds.has(gameName)) {
+    globalCounters.completedModIds.set(gameName, new Set());
+  }
+
+  console.log(`页面导航处理完成，准备重新开始处理`);
 }
 
 /**
@@ -232,7 +414,7 @@ function parseNexusUrl(url) {
     }
 
     const pathParts = urlObj.pathname.split('/').filter(Boolean);
-    
+
     // 处理标准mod页面URL格式
     if (pathParts.length >= 3 && pathParts[1] === 'mods') {
       const gameName = pathParts[0];
@@ -245,7 +427,7 @@ function parseNexusUrl(url) {
         isStandardModPage: true
       };
     }
-    
+
     // 处理游戏列表页面URL格式
     if (pathParts.length >= 2 && pathParts[0] === 'games') {
       return {
@@ -263,32 +445,40 @@ function parseNexusUrl(url) {
 }
 
 /**
- * 从游戏列表页面中提取所有模组ID
+ * 从游戏列表页面中提取所有模组ID - 修复版本：使用Set去重，避免重复模组
  * @returns {Array} 包含所有模组ID和对应元素的数组
  */
 function extractModIdsFromGameListPage() {
   const modsData = [];
   const modsGrid = document.querySelector('.mods-grid');
-  
+  const processedModIds = new Set(); // 使用Set来去重
+
   if (!modsGrid) {
     console.error('未找到模组网格元素');
     return modsData;
   }
-  
+
   const modLinks = modsGrid.querySelectorAll('a[href*="/mods/"]');
-  
+
   modLinks.forEach(link => {
     try {
       const href = link.getAttribute('href');
       const modIdMatch = href.match(/\/mods\/(\d+)/);
-      
+
       if (modIdMatch && modIdMatch[1]) {
         const modId = modIdMatch[1];
-        const modTile = link.closest('.mod-tile') || 
-                        link.closest('[class*="mod-tile"]') || 
+
+        // 如果已经处理过这个模组ID，跳过
+        if (processedModIds.has(modId)) {
+          return;
+        }
+
+        const modTile = link.closest('.mod-tile') ||
+                        link.closest('[class*="mod-tile"]') ||
                         link.parentElement;
-        
+
         if (modTile) {
+          processedModIds.add(modId); // 标记为已处理
           modsData.push({
             modId,
             element: modTile
@@ -299,7 +489,8 @@ function extractModIdsFromGameListPage() {
       console.error('提取模组ID时出错:', error);
     }
   });
-  
+
+  console.log(`提取模组完成，去重前链接数: ${modLinks.length}, 去重后模组数: ${modsData.length}`);
   return modsData;
 }
 
@@ -314,7 +505,7 @@ function createLoadingSpinner() {
     border-radius: 50%;
     animation: spin 1s linear infinite;
   `;
-  
+
   const style = document.createElement('style');
   style.textContent = `
     @keyframes spin {
@@ -323,13 +514,46 @@ function createLoadingSpinner() {
     }
   `;
   document.head.appendChild(style);
-  
+
   return spinner;
 }
 
 // 添加解析状态控制
 let isParsingEnabled = true;
 let activeRequests = new Set(); // 用于跟踪活动的请求
+
+// 添加防重复处理机制
+let isCurrentlyProcessing = false;
+let lastProcessedUrl = null;
+
+// 添加扩展上下文错误处理
+function handleExtensionError(error, operation) {
+  if (error.message && error.message.includes('Extension context invalidated')) {
+    console.warn(`扩展上下文已失效，操作: ${operation}。请刷新页面或重新加载扩展。`);
+    return true; // 表示已处理该错误
+  }
+  return false; // 表示不是扩展上下文错误
+}
+
+// 添加扩展上下文健康检查
+function checkExtensionHealth() {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage({ action: "healthCheck" }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn('扩展上下文健康检查失败:', chrome.runtime.lastError.message);
+          resolve(false);
+        } else {
+          console.log('扩展上下文健康检查通过');
+          resolve(true);
+        }
+      });
+    } catch (error) {
+      console.warn('扩展上下文健康检查异常:', error.message);
+      resolve(false);
+    }
+  });
+}
 
 // 监听来自 background.js 的消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -344,29 +568,48 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       handleModUrlDetected(modInfo);
     }
   } else if (request.action === "toggleParsing") {
-    isParsingEnabled = !isParsingEnabled;
-    
+    // 如果消息包含全局状态，使用全局状态；否则切换本地状态
+    if (request.globalStatus !== undefined) {
+      isParsingEnabled = request.globalStatus;
+      console.log(`接收到全局解析状态: ${isParsingEnabled ? '开启' : '暂停'}`);
+    } else {
+      isParsingEnabled = !isParsingEnabled;
+      console.log(`切换解析状态: ${isParsingEnabled ? '开启' : '暂停'}`);
+
+      // 只有本地切换时才更新全局缓存
+      chrome.runtime.sendMessage({
+        action: "updateParsingStatus",
+        isParsingEnabled: isParsingEnabled
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn('更新解析状态到全局缓存失败:', chrome.runtime.lastError.message);
+        } else {
+          console.log('解析状态已更新到全局缓存');
+        }
+      });
+    }
+
     // 更新所有加载状态的显示，使用更精确的选择器
     document.querySelectorAll(`.${CONTAINER_CLASS}`).forEach(container => {
       // 查找加载中的内容 - 通过查找具有LOADING样式特征的元素
       const loadingContent = container.querySelector('div[style*="display: flex"][style*="align-items: center"][style*="gap: 8px"]');
       if (loadingContent) {
         // 确认是加载状态而不是已完成状态
-        const isLoadingState = loadingContent.textContent.includes('获取直链') || 
+        const isLoadingState = loadingContent.textContent.includes('获取直链') ||
                               loadingContent.textContent.includes('N网助手');
-        
+
         if (isLoadingState) {
           // 移除现有的加载动画
           const existingSpinner = loadingContent.querySelector('div');
           if (existingSpinner) {
             existingSpinner.remove();
           }
-          
+
           // 更新文本
           const loadingText = loadingContent.querySelector('span');
           if (loadingText) {
             loadingText.textContent = isParsingEnabled ? 'N网助手正在获取直链....' : '获取直链已暂停';
-            
+
             // 如果恢复解析，添加加载动画
             if (isParsingEnabled) {
               const spinner = createLoadingSpinner();
@@ -376,7 +619,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
       }
     });
-    
+
+    // 更新进度条状态 - 这是关键的修复
+    const modInfo = parseNexusUrl(window.location.href);
+    if (modInfo && modInfo.isValid && modInfo.isGameListPage && globalCounters.currentGameName) {
+      console.log(`更新进度条状态，游戏: ${globalCounters.currentGameName}`);
+      updateProgressDisplay(globalCounters.currentGameName);
+    }
+
     // 显示状态提示
     const statusContainer = document.createElement('div');
     statusContainer.style.cssText = `
@@ -397,7 +647,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       align-items: center;
       gap: 8px;
     `;
-    
+
     // 添加图标
     const icon = document.createElement('span');
     icon.style.cssText = `
@@ -407,25 +657,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       background-color: ${isParsingEnabled ? '#4CAF50' : '#FFA726'};
     `;
     statusContainer.appendChild(icon);
-    
+
     // 添加文本
     const statusText = document.createElement('span');
     statusText.textContent = isParsingEnabled ? '已开启自动解析' : '已暂停自动解析';
     statusContainer.appendChild(statusText);
-    
+
     document.body.appendChild(statusContainer);
-    
+
     // 3秒后淡出
     setTimeout(() => {
       statusContainer.style.opacity = '0';
       setTimeout(() => statusContainer.remove(), 300);
     }, 3000);
-    
+
     // 如果重新启用解析，立即处理当前页面
     if (isParsingEnabled) {
       const modInfo = parseNexusUrl(window.location.href);
       if (modInfo && modInfo.isValid) {
-        handleModUrlDetected(modInfo);
+        if (modInfo.isGameListPage) {
+          // 对于游戏列表页面，重新处理模组
+          console.log('重新启用解析，处理游戏列表页面');
+          handleGameListPage(modInfo.gameName);
+        } else {
+          // 对于标准模组页面，使用原有逻辑
+          handleModUrlDetected(modInfo);
+        }
       }
     }
   } else if (request.action === "getDirectLink") {
@@ -474,6 +731,132 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         `;
       }
     }
+  } else if (request.action === 'updateModTileLinks') {
+    const { modId, gameName, downloadUrls, fullUrl } = request;
+
+    // 改进的模组查找逻辑：添加重试机制和更稳定的查找方法
+    const findAndUpdateModTile = (retryCount = 0) => {
+      console.log(`查找模组 ${modId} 的元素，重试次数: ${retryCount}`);
+
+      // 方法1：使用extractModIdsFromGameListPage
+      let modsData = extractModIdsFromGameListPage();
+      let targetMod = modsData.find(m => m.modId === modId);
+
+      // 方法2：如果方法1失败，直接通过DOM查找
+      if (!targetMod) {
+        console.log(`方法1未找到模组 ${modId}，尝试直接DOM查找`);
+        const modLinks = document.querySelectorAll(`a[href*="/mods/${modId}"]`);
+        for (const link of modLinks) {
+          const modTile = link.closest('.mod-tile') ||
+                          link.closest('[class*="mod-tile"]') ||
+                          link.parentElement;
+          if (modTile) {
+            targetMod = { modId, element: modTile };
+            console.log(`通过直接DOM查找找到模组 ${modId}`);
+            break;
+          }
+        }
+      }
+
+      if (targetMod) {
+        console.log(`成功找到模组 ${modId} 的元素，开始更新直链`);
+        // 保存到缓存
+        saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl);
+        displayDirectLinksInModTile(targetMod.element, downloadUrls, fullUrl);
+
+        // 更新进度计数器 - 使用新的统一方法，添加防重复检查
+        if (!globalCounters.completedModIds.has(gameName)) {
+          globalCounters.completedModIds.set(gameName, new Set());
+        }
+
+        const completedSet = globalCounters.completedModIds.get(gameName);
+        if (!completedSet.has(modId)) {
+          completedSet.add(modId);
+          console.log(`模组 ${modId} 完成，当前完成数量: ${completedSet.size}`);
+        } else {
+          console.log(`模组 ${modId} 已经在完成列表中，跳过重复添加`);
+        }
+
+        // 使用统一的进度更新函数
+        updateProgressDisplay(gameName);
+        return true;
+      } else if (retryCount < 3) {
+        // 如果没找到且重试次数未达上限，等待后重试
+        console.log(`未找到模组 ${modId} 的元素，${500 * (retryCount + 1)}ms后重试`);
+        setTimeout(() => {
+          findAndUpdateModTile(retryCount + 1);
+        }, 500 * (retryCount + 1)); // 递增延迟：500ms, 1000ms, 1500ms
+        return false;
+      } else {
+        console.error(`多次重试后仍未找到模组 ${modId} 的元素`);
+        // 即使找不到元素，也要保存到缓存和更新计数器
+        saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl);
+        if (!globalCounters.completedModIds.has(gameName)) {
+          globalCounters.completedModIds.set(gameName, new Set());
+        }
+        if (!globalCounters.completedModIds.get(gameName).has(modId)) {
+          globalCounters.completedModIds.get(gameName).add(modId);
+          console.log(`模组 ${modId} 完成（未找到元素），当前完成数量: ${globalCounters.completedModIds.get(gameName).size}`);
+        }
+        updateProgressDisplay(gameName);
+        return false;
+      }
+    };
+
+    // 立即尝试查找和更新
+    findAndUpdateModTile();
+
+    sendResponse({ success: true });
+    return true;
+  } else if (request.action === 'updateModTileError') {
+    const { modId, gameName, error } = request;
+
+    // 改进的模组查找逻辑：与updateModTileLinks保持一致
+    const findAndUpdateModTileError = (retryCount = 0) => {
+      console.log(`查找模组 ${modId} 的元素以显示错误，重试次数: ${retryCount}`);
+
+      // 方法1：使用extractModIdsFromGameListPage
+      let modsData = extractModIdsFromGameListPage();
+      let targetMod = modsData.find(m => m.modId === modId);
+
+      // 方法2：如果方法1失败，直接通过DOM查找
+      if (!targetMod) {
+        console.log(`方法1未找到模组 ${modId}，尝试直接DOM查找`);
+        const modLinks = document.querySelectorAll(`a[href*="/mods/${modId}"]`);
+        for (const link of modLinks) {
+          const modTile = link.closest('.mod-tile') ||
+                          link.closest('[class*="mod-tile"]') ||
+                          link.parentElement;
+          if (modTile) {
+            targetMod = { modId, element: modTile };
+            console.log(`通过直接DOM查找找到模组 ${modId}`);
+            break;
+          }
+        }
+      }
+
+      if (targetMod) {
+        console.log(`成功找到模组 ${modId} 的元素，显示错误信息`);
+        displayErrorInModTile(targetMod.element, error);
+        return true;
+      } else if (retryCount < 3) {
+        // 如果没找到且重试次数未达上限，等待后重试
+        console.log(`未找到模组 ${modId} 的元素，${500 * (retryCount + 1)}ms后重试`);
+        setTimeout(() => {
+          findAndUpdateModTileError(retryCount + 1);
+        }, 500 * (retryCount + 1));
+        return false;
+      } else {
+        console.error(`多次重试后仍未找到模组 ${modId} 的元素，无法显示错误信息: ${error}`);
+        return false;
+      }
+    };
+
+    // 立即尝试查找和更新
+    findAndUpdateModTileError();
+
+    sendResponse({ success: true });
+    return true;
   }
 });
 
@@ -488,7 +871,7 @@ async function handleModUrlDetected(modInfo) {
       handleGameListPage(modInfo.gameName);
       return;
     }
-    
+
     // 检查缓存中是否已有该模组的直链
     const cachedData = getDirectLinksFromCache(modInfo.gameName, modInfo.modId);
     if (cachedData) {
@@ -496,12 +879,13 @@ async function handleModUrlDetected(modInfo) {
       displayAllDirectLinks(cachedData.downloadUrls);
       return;
     }
-    
+
     // 发送消息给background.js获取所有下载链接
     chrome.runtime.sendMessage({
       action: "getAllDownloadUrls",
       modId: modInfo.modId,
-      gameName: modInfo.gameName
+      gameName: modInfo.gameName,
+      isGameListPage: false // 标准模组页面
     }, (response) => {
       if (response.success && response.downloadUrls) {
         // 保存到缓存
@@ -522,244 +906,283 @@ async function handleModUrlDetected(modInfo) {
 }
 
 /**
- * 处理游戏列表页面
+ * 处理游戏列表页面 - 重构版本
  * @param {string} gameName 游戏名称
  */
 function handleGameListPage(gameName) {
-  // 添加一个函数来获取或创建进度弹窗
-  const getOrCreateProgressContainer = () => {
-    // 查找已存在的进度弹窗
-    let progressContainer = document.querySelector('.nexus-progress-container');
-    
-    if (!progressContainer) {
-      // 如果不存在，创建新的进度弹窗
-      progressContainer = document.createElement('div');
-      progressContainer.className = 'nexus-progress-container';
-      progressContainer.style.cssText = `
-        position: fixed;
-        top: 100px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: rgba(255, 255, 255, 0.95);
-        color: #333;
-        padding: 12px 24px;
-        border-radius: 8px;
-        z-index: 9999;
-        font-size: 14px;
-        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-        font-weight: 500;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 8px;
-        transition: opacity 0.3s;
-      `;
-      
-      // 添加加载动画和文本容器
-      const progressRow = document.createElement('div');
-      progressRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
-      
-      const spinner = createLoadingSpinner();
-      progressRow.appendChild(spinner);
-      
-      const textContainer = document.createElement('span');
-      textContainer.className = 'nexus-progress-text';
-      textContainer.innerHTML = `正在获取链接: ${globalCounters.completedMods}/${globalCounters.totalMods}`;
-      progressRow.appendChild(textContainer);
-      
-      // 添加展开按钮到同一行
-      const expandButton = createExpandButton(progressContainer, gameName);
-      progressRow.appendChild(expandButton);
-      
-      progressContainer.appendChild(progressRow);
-      document.body.appendChild(progressContainer);
-    }
-    
-    return progressContainer;
-  };
+    const currentUrl = window.location.href;
+    console.log(`开始处理游戏列表页面: ${gameName}, 当前URL: ${currentUrl}`);
+    console.log(`解析状态: ${isParsingEnabled ? '启用' : '暂停'}`);
 
-  const processMods = (retryCount = 0) => {
-    const modsData = extractModIdsFromGameListPage();
-    
-    if (modsData.length === 0) {
-      console.log(`未找到任何模组ID，重试次数: ${retryCount}`);
-      if (retryCount < 5) { // 最多重试5次
+    // 简化逻辑：移除复杂的防重复处理检查
+    // 因为background.js已经处理了页面切换，这里直接处理即可
+
+    // 设置处理状态
+    isCurrentlyProcessing = true;
+    lastProcessedUrl = currentUrl;
+
+    // 设置处理完成的回调
+    const finishProcessing = () => {
         setTimeout(() => {
-          processMods(retryCount + 1);
-        }, 1000);
-      } else {
-        console.error('多次重试后仍未找到模组ID');
-      }
-      return;
-    }
-    
-    console.log(`找到 ${modsData.length} 个模组`);
-    
-    // 确保当前游戏的processedModIds集合存在
-    if (!globalCounters.processedModIds.has(gameName)) {
-      globalCounters.processedModIds.set(gameName, new Set());
-    }
-    
-    // 过滤出未处理过的模组
-    const newMods = modsData.filter(modData => !globalCounters.processedModIds.get(gameName).has(modData.modId));
-    console.log(`其中 ${newMods.length} 个是新模组`);
-    
-    // 更新总模组数量，只计算新模组
-    globalCounters.totalMods += newMods.length;
-    
-    // 将所有模组ID添加到已处理集合中
-    modsData.forEach(modData => {
-      globalCounters.processedModIds.get(gameName).add(modData.modId);
-    });
-    
-    // 统计缓存中的模组数量
-    let cachedModsCount = 0;
-    modsData.forEach(modData => {
-      const cacheKey = getCacheKey(gameName, modData.modId);
-      if (parsedLinksCache.has(cacheKey)) {
-        cachedModsCount++;
-        // 只有新发现的缓存模组才增加完成计数
-        if (newMods.some(newMod => newMod.modId === modData.modId)) {
-          globalCounters.completedMods++;
-        }
-      }
-    });
-    
-    // 为每个模组添加加载状态
-    modsData.forEach(modData => {
-      // 检查缓存中是否已有该模组的直链
-      const cacheKey = getCacheKey(gameName, modData.modId);
-      if (parsedLinksCache.has(cacheKey)) {
-        // 如果缓存中有，直接显示缓存的直链
-        const cachedData = parsedLinksCache.get(cacheKey);
-        displayDirectLinksInModTile(modData.element, cachedData.downloadUrls, cachedData.fullUrl);
-      } else {
-        // 如果缓存中没有，显示加载状态
-        displayLoadingInModTile(modData.element);
-      }
-    });
-    
-    // 从本地存储获取高级设置
-    chrome.storage.local.get([
-      STORAGE_KEYS.MAX_CONCURRENT_REQUESTS, 
-      STORAGE_KEYS.REQUEST_DELAY
-    ], (result) => {
-      // 默认值：1个并发请求，2500毫秒间隔
-      const MAX_CONCURRENT_REQUESTS = result[STORAGE_KEYS.MAX_CONCURRENT_REQUESTS] !== undefined 
-        ? result[STORAGE_KEYS.MAX_CONCURRENT_REQUESTS] 
-        : 1;
-      const DELAY_BETWEEN_REQUESTS = result[STORAGE_KEYS.REQUEST_DELAY] !== undefined 
-        ? result[STORAGE_KEYS.REQUEST_DELAY] 
-        : 2500;
-      
-      console.log('使用请求设置:', { MAX_CONCURRENT_REQUESTS, DELAY_BETWEEN_REQUESTS });
-      
-      // 创建一个队列处理函数
-      const processQueue = async (queue) => {
-        // 获取或创建进度弹窗
-        const progressContainer = getOrCreateProgressContainer();
-        const textContainer = progressContainer.querySelector('.nexus-progress-text');
-        const spinner = progressContainer.querySelector('div[style*="border-radius: 50%"]');
-        
-        // 确保文本容器存在
-        if (!textContainer) {
-          console.error('未找到进度文本容器');
-          return;
-        }
-        
-        // 处理队列
-        let activeRequests = 0;
-        let index = 0;
-        
-        return new Promise(resolve => {
-          const runNext = () => {
-            // 如果解析已暂停，不继续处理
-            if (!isParsingEnabled) {
-              textContainer.innerHTML = `获取链接已暂停: ${globalCounters.completedMods}/${globalCounters.totalMods}`;
-              // 移除加载动画
-              if (spinner && spinner.parentNode) {
-                spinner.parentNode.removeChild(spinner);
-              }
-              return;
-            }
-            
-            if (index >= queue.length) {
-              if (activeRequests === 0) {
-                // 所有请求完成，更新文本
-                textContainer.innerHTML = `已完成: ${globalCounters.completedMods}/${globalCounters.totalMods}`;
-                // 移除加载动画
-                if (spinner && spinner.parentNode) {
-                  spinner.parentNode.removeChild(spinner);
-                }
-                resolve();
-              }
-              return;
-            }
-            
-            if (activeRequests < MAX_CONCURRENT_REQUESTS) {
-              const currentModData = queue[index++];
-              const cacheKey = getCacheKey(gameName, currentModData.modId);
-              
-              // 如果缓存中已有该模组的直链，跳过请求
-              if (parsedLinksCache.has(cacheKey)) {
-                runNext();
-                return;
-              }
-              
-              activeRequests++;
-              
-              // 构建完整的URL
-              const fullUrl = `https://www.nexusmods.com/${gameName}/mods/${currentModData.modId}?tab=files`;
-              
-              // 发送消息给background.js获取下载链接
-              setTimeout(() => {
-                // 如果解析已暂停，不发送请求
-                if (!isParsingEnabled) {
-                  activeRequests--;
-                  runNext();
-                  return;
-                }
-                
-                chrome.runtime.sendMessage({
-                  action: "getAllDownloadUrls",
-                  modId: currentModData.modId,
-                  gameName: gameName
-                }, (response) => {
-                  activeRequests--;
-                  
-                  if (response.success && response.downloadUrls) {
-                    // 将解析结果存入缓存
-                    saveDirectLinksToCache(gameName, currentModData.modId, response.downloadUrls, fullUrl);
-                    displayDirectLinksInModTile(currentModData.element, response.downloadUrls, fullUrl);
-                    // 更新完成计数，只有未处理过的模组才增加计数
-                    globalCounters.completedMods++;
-                    // 更新进度显示
-                    textContainer.innerHTML = `正在获取链接: ${globalCounters.completedMods}/${globalCounters.totalMods}`;
-                  } else {
-                    displayErrorInModTile(currentModData.element, response.error || "获取下载链接失败");
-                  }
-                  
-                  // 继续处理队列
-                  runNext();
-                });
-              }, DELAY_BETWEEN_REQUESTS);
-            }
-          };
-          
-          // 开始处理队列，初始启动几个请求
-          for (let i = 0; i < Math.min(MAX_CONCURRENT_REQUESTS, queue.length); i++) {
-            runNext();
-          }
-        });
-      };
-      
-      // 开始处理队列
-      processQueue(modsData);
-    });
-  };
+            isCurrentlyProcessing = false;
+            console.log(`页面处理完成，重置处理状态: ${currentUrl}`);
+        }, 1000); // 减少到1秒，提高响应速度
+    };
 
-  // 开始处理
-  processMods();
+    // 重置并同步计数器
+    resetAndSyncCounters(gameName);
+
+    // 添加一个函数来获取或创建进度弹窗
+    const getOrCreateProgressContainer = () => {
+        // 查找已存在的进度弹窗
+        let progressContainer = document.querySelector('.nexus-progress-container');
+
+        if (!progressContainer) {
+            // 如果不存在，创建新的进度弹窗
+            progressContainer = document.createElement('div');
+            progressContainer.className = 'nexus-progress-container';
+            progressContainer.style.cssText = `
+                position: fixed;
+                top: 100px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(255, 255, 255, 0.95);
+                color: #333;
+                padding: 12px 24px;
+                border-radius: 8px;
+                z-index: 9999;
+                font-size: 14px;
+                box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+                font-weight: 500;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+                transition: opacity 0.3s;
+            `;
+
+            // 添加加载动画和文本容器
+            const progressRow = document.createElement('div');
+            progressRow.style.cssText = 'display: flex; align-items: center; gap: 8px;';
+
+            // 只在非暂停状态下添加加载动画
+            if (isParsingEnabled) {
+                const spinner = createLoadingSpinner();
+                progressRow.appendChild(spinner);
+            }
+
+            const textContainer = document.createElement('span');
+            textContainer.className = 'nexus-progress-text';
+            // 使用新的进度显示格式，初始显示当前分页进度
+            const currentPageMods = extractModIdsFromGameListPage();
+            const currentPageModCount = currentPageMods.length;
+            const initialProgressText = currentPageModCount > 0 ? `当前分页 0/${currentPageModCount}` : '准备中...';
+            textContainer.innerHTML = isParsingEnabled ?
+                `正在获取链接: ${initialProgressText}` :
+                `获取直链已暂停: ${initialProgressText}`;
+            progressRow.appendChild(textContainer);
+
+            // 添加展开按钮到同一行
+            const expandButton = createExpandButton(progressContainer, gameName);
+            progressRow.appendChild(expandButton);
+
+            progressContainer.appendChild(progressRow);
+            document.body.appendChild(progressContainer);
+        }
+
+        return progressContainer;
+    };
+
+    const processMods = (retryCount = 0) => {
+        console.log(`processMods 被调用，重试次数: ${retryCount}, 解析状态: ${isParsingEnabled ? '启用' : '暂停'}`);
+
+        const modsData = extractModIdsFromGameListPage();
+        console.log(`提取到 ${modsData.length} 个模组`);
+
+        if (modsData.length === 0) {
+            console.log(`未找到任何模组ID，重试次数: ${retryCount}`);
+            if (retryCount < 5) { // 最多重试5次
+                setTimeout(() => {
+                    processMods(retryCount + 1);
+                }, 2000);//重试延迟2秒
+            } else {
+                console.error('多次重试后仍未找到模组ID');
+            }
+            return;
+        }
+
+        console.log(`找到 ${modsData.length} 个模组`);
+
+        // 标记页面已初始化，但不再设置totalMods，因为我们现在直接使用当前页面数量
+        globalCounters.isPageInitialized = true;
+        console.log(`页面初始化完成，当前页面模组数: ${modsData.length}`);
+
+        // 清空已处理模组集合，重新开始
+        const processedSet = globalCounters.processedModIds.get(gameName);
+        processedSet.clear();
+        console.log(`清空已处理模组集合，重新开始处理`);
+
+        // 所有模组都需要处理（简化逻辑）
+        const newMods = modsData;
+        console.log(`所有 ${newMods.length} 个模组都需要处理`);
+
+        // 调试：打印当前页面的模组ID
+        console.log(`当前页面模组ID:`, modsData.map(m => m.modId));
+
+        // 修复：不要将所有模组都标记为已处理，只标记有缓存的模组
+        // 这样可以确保没有缓存的模组在下次处理时仍然被识别为新模组
+        modsData.forEach(modData => {
+            const cacheKey = getCacheKey(gameName, modData.modId);
+            if (parsedLinksCache.has(cacheKey)) {
+                // 只有有缓存的模组才标记为已处理
+                processedSet.add(modData.modId);
+            }
+        });
+
+        console.log(`标记为已处理的模组数量: ${processedSet.size}`);
+
+        // 同步缓存状态到计数器
+        const cachedCount = syncCacheToCounters(gameName, modsData);
+        console.log(`发现 ${cachedCount} 个缓存模组`);
+
+        // 为所有模组添加直链显示 - 改进版本，添加延迟确保DOM稳定
+        const displayModLinks = () => {
+            console.log(`开始为 ${modsData.length} 个模组显示直链状态`);
+            modsData.forEach((modData, index) => {
+                // 添加小延迟，确保DOM元素稳定
+                setTimeout(() => {
+                    // 检查缓存中是否已有该模组的直链
+                    const cacheKey = getCacheKey(gameName, modData.modId);
+                    if (parsedLinksCache.has(cacheKey)) {
+                        // 如果缓存中有，直接显示缓存的直链
+                        const cachedData = parsedLinksCache.get(cacheKey);
+                        console.log(`显示模组 ${modData.modId} 的缓存直链`);
+                        displayDirectLinksInModTile(modData.element, cachedData.downloadUrls, cachedData.fullUrl);
+                    } else {
+                        // 如果缓存中没有，显示加载状态
+                        console.log(`显示模组 ${modData.modId} 的加载状态`);
+                        displayLoadingInModTile(modData.element);
+                    }
+                }, index * 10); // 每个模组延迟10ms，避免同时操作大量DOM
+            });
+        };
+
+        // 立即显示，然后在DOM稳定后再次确保显示
+        displayModLinks();
+        setTimeout(displayModLinks, 500); // 500ms后再次确保显示
+
+        // 获取或创建进度弹窗 - 确保在更新进度前创建
+        const progressContainer = getOrCreateProgressContainer();
+        console.log('进度容器创建/获取完成:', progressContainer ? '成功' : '失败');
+
+        // 重新计算需要后台处理的模组：所有没有缓存的模组
+        const modsToProcessByBackground = modsData.filter(modData => {
+            const cacheKey = getCacheKey(gameName, modData.modId);
+            return !parsedLinksCache.has(cacheKey);
+        });
+
+        console.log(`需要后台处理的模组数量: ${modsToProcessByBackground.length}`);
+
+        // 使用统一的进度更新函数 - 确保进度容器已存在
+        updateProgressDisplay(gameName);
+
+        // 检查是否暂停状态
+        if (!isParsingEnabled) {
+            console.log('获取直链已暂停，显示暂停状态但不发送到后台处理');
+            updateProgressDisplay(gameName);
+            finishProcessing();
+            return;
+        }
+
+        if (modsToProcessByBackground.length > 0) {
+            console.log(`发送 ${modsToProcessByBackground.length} 个模组到后台处理`);
+
+            // 先进行扩展健康检查
+            checkExtensionHealth().then(isHealthy => {
+                if (!isHealthy) {
+                    console.error("扩展上下文不健康，无法处理模组");
+                    // 显示错误信息给用户
+                    modsToProcessByBackground.forEach(modData => {
+                        displayErrorInModTile(modData.element, "扩展上下文失效，请刷新页面");
+                    });
+                    finishProcessing();
+                    return;
+                }
+
+                // 立即将这些模组标记为已处理，避免重复发送
+                modsToProcessByBackground.forEach(modData => {
+                    processedSet.add(modData.modId);
+                });
+                console.log(`已将 ${modsToProcessByBackground.length} 个模组标记为处理中`);
+
+                // 扩展健康，继续发送消息
+                console.log("扩展健康检查通过，发送模组处理请求...");
+
+                // 只发送需要后台处理的模组
+                try {
+                    console.log("准备发送消息到background.js，消息内容:", {
+                        action: "processGameListMods",
+                        mods: modsToProcessByBackground.map(modData => ({
+                            modId: modData.modId,
+                            gameName: gameName
+                        }))
+                    });
+
+                    chrome.runtime.sendMessage({
+                        action: "processGameListMods",
+                        mods: modsToProcessByBackground.map(modData => ({
+                            modId: modData.modId,
+                            gameName: gameName
+                        })),
+                        currentPageUrl: window.location.href // 添加当前页面URL
+                    }, (response) => {
+                        console.log("收到background.js的响应:", response);
+                        console.log("chrome.runtime.lastError:", chrome.runtime.lastError);
+
+                        if (chrome.runtime.lastError) {
+                            console.error("Chrome runtime错误详情:", chrome.runtime.lastError);
+                            if (!handleExtensionError(chrome.runtime.lastError, "发送模组处理请求")) {
+                                console.error("发送模组处理请求失败:", chrome.runtime.lastError.message);
+                                // 如果发送失败，从已处理集合中移除这些模组
+                                modsToProcessByBackground.forEach(modData => {
+                                    processedSet.delete(modData.modId);
+                                });
+                            }
+                            return;
+                        }
+
+                        if (response && response.success) {
+                            console.log("已发送未缓存模组列表到后台脚本处理。");
+                        } else {
+                            console.error("发送未缓存模组列表到后台脚本失败:", response ? response.error : "无响应");
+                            // 如果后台处理失败，从已处理集合中移除这些模组
+                            modsToProcessByBackground.forEach(modData => {
+                                processedSet.delete(modData.modId);
+                            });
+                        }
+                    });
+                } catch (error) {
+                    if (!handleExtensionError(error, "发送模组处理请求")) {
+                        console.error("发送模组处理请求异常:", error);
+                        // 如果发送异常，从已处理集合中移除这些模组
+                        modsToProcessByBackground.forEach(modData => {
+                            processedSet.delete(modData.modId);
+                        });
+                    }
+                }
+            });
+        } else {
+            // 修复：不要强制标记为完成，让 updateProgressDisplay 自己判断
+            console.log("当前页面所有模组都已缓存或无新模组需要处理");
+            updateProgressDisplay(gameName); // 移除 true 参数，让函数自己判断是否完成
+        }
+
+        // 处理完成后重置状态
+        finishProcessing();
+    };
+
+    // 开始处理
+    processMods();
 }
 
 /**
@@ -768,29 +1191,29 @@ function handleGameListPage(gameName) {
  */
 function displayLoadingInModTile(modTile) {
   if (!modTile) return;
-  
+
   // 检查是否已经存在直链容器
   if (modTile.querySelector(`.${CONTAINER_CLASS}`)) return;
-  
+
   const container = document.createElement('div');
   container.className = CONTAINER_CLASS;
   container.style.cssText = STYLES.CONTAINER;
-  
+
   const loadingContent = document.createElement('div');
   loadingContent.style.cssText = STYLES.LOADING;
-  
+
   // 只在非暂停状态下添加加载动画
   if (isParsingEnabled) {
     const spinner = createLoadingSpinner();
     loadingContent.appendChild(spinner);
   }
-  
+
   const loadingText = document.createElement('span');
   loadingText.textContent = isParsingEnabled ? 'N网助手正在获取直链....' : '获取直链已暂停';
   loadingContent.appendChild(loadingText);
-  
+
   container.appendChild(loadingContent);
-  
+
   // 插入到模组卡片中
   modTile.appendChild(container);
 }
@@ -803,18 +1226,18 @@ function displayLoadingInModTile(modTile) {
  */
 function displayDirectLinksInModTile(modTile, downloadUrls, fullUrl) {
   if (!modTile || !downloadUrls || downloadUrls.length === 0) return;
-  
+
   // 移除现有的容器
   const existingContainer = modTile.querySelector(`.${CONTAINER_CLASS}`);
   if (existingContainer) {
     existingContainer.remove();
   }
-  
+
   // 创建新容器
   const container = document.createElement('div');
   container.className = CONTAINER_CLASS;
   container.style.cssText = STYLES.CONTAINER;
-  
+
   // 创建顶部信息行（查看模组页面 + 文件数量提示）
   const topInfoRow = document.createElement('div');
   topInfoRow.style.cssText = `
@@ -823,7 +1246,7 @@ function displayDirectLinksInModTile(modTile, downloadUrls, fullUrl) {
     align-items: center;
     margin-bottom: 8px;
   `;
-  
+
   // 添加模组页面链接
   const modPageLink = document.createElement('a');
   modPageLink.href = fullUrl;
@@ -835,7 +1258,7 @@ function displayDirectLinksInModTile(modTile, downloadUrls, fullUrl) {
   `;
   modPageLink.textContent = '查看模组页面';
   topInfoRow.appendChild(modPageLink);
-  
+
   // 添加文件数量提示 - 无论是否暂停解析，只要有多个文件都显示
   if (downloadUrls.length > 1) {
     const fileCountInfo = document.createElement('div');
@@ -849,16 +1272,16 @@ function displayDirectLinksInModTile(modTile, downloadUrls, fullUrl) {
       align-items: center;
       gap: 4px;
     `;
-    
+
     const fileCountText = document.createElement('span');
     fileCountText.textContent = `模组有 ${downloadUrls.length} 个文件`;
     fileCountInfo.appendChild(fileCountText);
-    
+
     topInfoRow.appendChild(fileCountInfo);
   }
-  
+
   container.appendChild(topInfoRow);
-  
+
   // 显示第一个直链和复制按钮
   if (downloadUrls.length > 0) {
     const directLinkRow = document.createElement('div');
@@ -867,7 +1290,7 @@ function displayDirectLinksInModTile(modTile, downloadUrls, fullUrl) {
       align-items: center;
       gap: 10px;
     `;
-    
+
     const linkElement = document.createElement('a');
     linkElement.href = downloadUrls[0].url;
     linkElement.target = '_blank';
@@ -908,10 +1331,10 @@ function displayDirectLinksInModTile(modTile, downloadUrls, fullUrl) {
       });
     };
     directLinkRow.appendChild(copyButton);
-    
+
     container.appendChild(directLinkRow);
   }
-  
+
   // 插入到模组卡片中
   modTile.appendChild(container);
 }
@@ -923,22 +1346,22 @@ function displayDirectLinksInModTile(modTile, downloadUrls, fullUrl) {
  */
 function displayErrorInModTile(modTile, message) {
   if (!modTile) return;
-  
+
   // 移除现有的容器
   const existingContainer = modTile.querySelector(`.${CONTAINER_CLASS}`);
   if (existingContainer) {
     existingContainer.remove();
   }
-  
+
   const container = document.createElement('div');
   container.className = CONTAINER_CLASS;
   container.style.cssText = STYLES.CONTAINER;
-  
+
   const errorMessage = document.createElement('div');
   errorMessage.textContent = message;
   errorMessage.style.cssText = STYLES.ERROR;
   container.appendChild(errorMessage);
-  
+
   // 插入到模组卡片中
   modTile.appendChild(container);
 }
@@ -1026,17 +1449,17 @@ function displayLoading(fileId) {
 
   const loadingContent = document.createElement('div');
   loadingContent.style.cssText = STYLES.LOADING;
-  
+
   // 只在非暂停状态下添加加载动画
   if (isParsingEnabled) {
     const spinner = createLoadingSpinner();
     loadingContent.appendChild(spinner);
   }
-  
+
   const loadingText = document.createElement('span');
   loadingText.textContent = isParsingEnabled ? 'N网助手正在获取直链....' : '获取直链已暂停';
   loadingContent.appendChild(loadingText);
-  
+
   container.appendChild(loadingContent);
 
   // 插入到预览按钮后面
@@ -1072,54 +1495,39 @@ let isProcessing = false;
 const originalFetch = window.fetch;
 window.fetch = async function(...args) {
   const response = await originalFetch.apply(this, args);
-  
+
   // 检查是否是目标GraphQL请求
   if (args[0] === 'https://api-router.nexusmods.com/graphql') {
-    console.log('检测到GraphQL请求');
+    console.log('检测到GraphQL请求，当前URL:', window.location.href);
     // 检查当前是否是游戏列表页面
     const modInfo = parseNexusUrl(window.location.href);
+    console.log('URL解析结果:', modInfo);
     if (modInfo && modInfo.isValid && modInfo.isGameListPage) {
-      console.log('确认是游戏列表页面');
+      console.log(`确认是游戏列表页面，游戏: ${modInfo.gameName}`);
       // 克隆响应以便我们可以读取它
       const clone = response.clone();
       try {
         const data = await clone.json();
         console.log('GraphQL响应数据:', data);
-        // 如果请求成功且有数据返回
+        // 简化逻辑：如果请求成功且有数据返回，直接处理
         if (data && !isProcessing) {
-          console.log('开始处理游戏列表页面');
+          console.log(`开始处理游戏列表页面: ${modInfo.gameName}`);
           // 设置标志位，防止重复处理
           isProcessing = true;
-          
-          // 等待页面元素加载完成
-          const waitForElements = () => {
-            return new Promise((resolve) => {
-              const checkElements = () => {
-                const modsGrid = document.querySelector('.mods-grid');
-                if (modsGrid) {
-                  console.log('找到模组网格元素');
-                  resolve();
-                } else {
-                  console.log('等待模组网格元素加载...');
-                  setTimeout(checkElements, 500);
-                }
-              };
-              checkElements();
-            });
-          };
 
-          // 等待元素加载完成后再处理
-          waitForElements().then(() => {
+          // 简化处理：直接处理，不等待特定元素
+          setTimeout(() => {
             // 先获取用户的URL监听设置
             chrome.storage.local.get([
-              STORAGE_KEYS.STANDARD_URL_ENABLED, 
               STORAGE_KEYS.GAME_LIST_URL_ENABLED
             ], (result) => {
               const gameListUrlEnabled = result[STORAGE_KEYS.GAME_LIST_URL_ENABLED] !== undefined ? result[STORAGE_KEYS.GAME_LIST_URL_ENABLED] : false;
-              
+
               // 只在游戏列表监听开启时处理
               if (gameListUrlEnabled) {
                 console.log('游戏列表监听已开启，开始处理');
+                // 处理页面导航状态重置
+                handlePageNavigation(modInfo.gameName);
                 // 处理游戏列表页面
                 handleGameListPage(modInfo.gameName);
               } else {
@@ -1129,9 +1537,9 @@ window.fetch = async function(...args) {
               setTimeout(() => {
                 isProcessing = false;
                 console.log('处理完成，重置处理状态');
-              }, 1000); // 添加延迟，避免过快重置导致重复处理
+              }, 1000);
             });
-          });
+          }, 500); // 简单延迟500ms等待DOM更新
         } else {
           console.log('GraphQL响应无效或正在处理中');
         }
@@ -1144,7 +1552,7 @@ window.fetch = async function(...args) {
       console.log('不是游戏列表页面或URL无效');
     }
   }
-  
+
   return response;
 };
 
@@ -1177,7 +1585,7 @@ const domChangeObserver = new MutationObserver(
                     return false;
                 }
                 // 检查是否包含data-id属性
-                return node.hasAttribute('data-id') || 
+                return node.hasAttribute('data-id') ||
                        node.querySelector('[data-id]') !== null;
             });
         });
@@ -1210,31 +1618,33 @@ const urlChangeObserver = new MutationObserver(() => {
     if (currentUrl !== lastUrl) {
         console.log('URL发生变化:', currentUrl);
         lastUrl = currentUrl;
-        
+
         // 更新DOM观察状态
         startObserving();
-        
+
         // 解析当前URL
         const modInfo = parseNexusUrl(currentUrl);
         if (modInfo && modInfo.isValid) {
             // 获取用户的URL监听设置
             chrome.storage.local.get([
-                STORAGE_KEYS.STANDARD_URL_ENABLED, 
+                STORAGE_KEYS.STANDARD_URL_ENABLED,
                 STORAGE_KEYS.GAME_LIST_URL_ENABLED
             ], (result) => {
                 const standardUrlEnabled = result[STORAGE_KEYS.STANDARD_URL_ENABLED] !== undefined ? result[STORAGE_KEYS.STANDARD_URL_ENABLED] : true;
                 const gameListUrlEnabled = result[STORAGE_KEYS.GAME_LIST_URL_ENABLED] !== undefined ? result[STORAGE_KEYS.GAME_LIST_URL_ENABLED] : false;
-                
+
                 // 根据URL类型和用户设置决定是否处理
                 if (modInfo.isGameListPage && gameListUrlEnabled) {
                     console.log('检测到游戏列表页面，开始处理');
+                    // 处理页面导航状态重置
+                    handlePageNavigation(modInfo.gameName);
                     handleGameListPage(modInfo.gameName);
                 } else if (!modInfo.isGameListPage && standardUrlEnabled) {
                     console.log('检测到标准模组页面，开始处理');
-                    
+
                     // 检查是否是files标签页
                     const isFilesTab = currentUrl.includes('tab=files');
-                    
+
                     // 如果是files标签页，使用handleControlPanelTable
                     if (isFilesTab) {
                         console.log('检测到files标签页，使用handleControlPanelTable处理');
@@ -1243,7 +1653,7 @@ const urlChangeObserver = new MutationObserver(() => {
                         // 其他标签页使用handleModUrlDetected
                         handleModUrlDetected(modInfo);
                     }
-                    
+
                     // 如果是描述页面，初始化AI分析器
                     if (isModDescriptionPage(currentUrl)) {
                         console.log('检测到模组描述页面，初始化AI分析器');
@@ -1266,27 +1676,41 @@ window.addEventListener('load', () => {
   restoreParsedLinksCache();
   // 每小时检查一次过期缓存
   setInterval(cleanupExpiredCache, 60 * 60 * 1000);
-  
+
+  // 从全局缓存同步解析状态
+  chrome.runtime.sendMessage({
+    action: "getParsingStatus"
+  }, (response) => {
+    if (chrome.runtime.lastError) {
+      console.warn('获取全局解析状态失败:', chrome.runtime.lastError.message);
+    } else if (response && response.isParsingEnabled !== undefined) {
+      isParsingEnabled = response.isParsingEnabled;
+      console.log('已同步全局解析状态:', isParsingEnabled ? '启用' : '暂停');
+    }
+  });
+
   // 解析当前URL
   const modInfo = parseNexusUrl(window.location.href);
   if (modInfo && modInfo.isValid) {
     chrome.storage.local.get([
-      STORAGE_KEYS.STANDARD_URL_ENABLED, 
+      STORAGE_KEYS.STANDARD_URL_ENABLED,
       STORAGE_KEYS.GAME_LIST_URL_ENABLED
     ], (result) => {
       const standardUrlEnabled = result[STORAGE_KEYS.STANDARD_URL_ENABLED] !== undefined ? result[STORAGE_KEYS.STANDARD_URL_ENABLED] : true;
       const gameListUrlEnabled = result[STORAGE_KEYS.GAME_LIST_URL_ENABLED] !== undefined ? result[STORAGE_KEYS.GAME_LIST_URL_ENABLED] : false;
-      
+
       // 根据URL类型和用户设置决定是否处理
       if (modInfo.isGameListPage && gameListUrlEnabled) {
         console.log('页面加载完成：检测到游戏列表页面，开始处理');
+        // 处理页面导航状态重置
+        handlePageNavigation(modInfo.gameName);
         handleGameListPage(modInfo.gameName);
       } else if (!modInfo.isGameListPage && standardUrlEnabled) {
         console.log('页面加载完成：检测到标准模组页面，开始处理');
-        
+
         // 检查是否是files标签页
         const isFilesTab = window.location.href.includes('tab=files');
-        
+
         // 如果是files标签页，使用handleControlPanelTable
         if (isFilesTab) {
           console.log('页面加载完成：检测到files标签页，使用handleControlPanelTable处理');
@@ -1295,7 +1719,7 @@ window.addEventListener('load', () => {
           // 其他标签页使用handleModUrlDetected
           handleModUrlDetected(modInfo);
         }
-        
+
         // 如果是描述页面，初始化AI分析器
         if (isModDescriptionPage(window.location.href)) {
           console.log('页面加载完成：检测到模组描述页面，初始化AI分析器');
@@ -1306,20 +1730,29 @@ window.addEventListener('load', () => {
   }
 });
 
-// 修改清除缓存的函数，重置计数器
+// 修改清除缓存的函数，重置计数器 - 使用新的重置逻辑
 function clearParsedLinksCache() {
   parsedLinksCache.clear();
   chrome.storage.local.remove(CACHE_STORAGE_KEY);
   console.log('直链缓存已清除');
-  
-  // 重置计数器和已处理模组ID集合
-  globalCounters.totalMods = 0;
+
+  // 重置计数器和已处理模组ID集合（移除totalMods重置）
   globalCounters.completedMods = 0;
   globalCounters.processedModIds.clear(); // 清空整个Map
-  
+  globalCounters.completedModIds.clear(); // 清空已完成模组ID集合
+  globalCounters.currentGameName = null; // 重置当前游戏名称
+  globalCounters.isPageInitialized = false; // 重置页面初始化状态
+
+  // 移除现有的进度弹窗
+  const existingProgress = document.querySelector('.nexus-progress-container');
+  if (existingProgress) {
+    existingProgress.remove();
+  }
+
   // 如果当前是游戏列表页面，重新处理所有模组
   const modInfo = parseNexusUrl(window.location.href);
   if (modInfo && modInfo.isValid && modInfo.isGameListPage) {
+    console.log('重新处理游戏列表页面');
     handleGameListPage(modInfo.gameName);
   }
 }
@@ -1327,7 +1760,7 @@ function clearParsedLinksCache() {
 // 修改handleControlPanelTable函数
 function handleControlPanelTable() {
     console.log('开始处理直链显示...');
-    
+
     // 获取当前页面的mod信息
     const modInfo = parseNexusUrl(window.location.href);
     if (!modInfo || !modInfo.isValid || modInfo.isGameListPage) {
@@ -1340,7 +1773,7 @@ function handleControlPanelTable() {
         return new Promise((resolve) => {
             let attempts = 0;
             const maxAttempts = 10; // 最多尝试10次
-            
+
             const checkElements = () => {
                 const fileElements = document.querySelectorAll('[data-id]');
                 if (fileElements.length > 0) {
@@ -1388,7 +1821,8 @@ function handleControlPanelTable() {
             chrome.runtime.sendMessage({
                 action: "getAllDownloadUrls",
                 modId: modInfo.modId,
-                gameName: modInfo.gameName
+                gameName: modInfo.gameName,
+                isGameListPage: false // 标准模组页面
             }, (response) => {
                 if (response.success && response.downloadUrls) {
                     // 保存到缓存
@@ -1417,14 +1851,14 @@ function handleControlPanelTable() {
 function cleanupExpiredCache() {
   const now = Date.now();
   let hasExpired = false;
-  
+
   parsedLinksCache.forEach((value, key) => {
     if (value.timestamp && (now - value.timestamp >= CACHE_EXPIRATION_TIME)) {
       parsedLinksCache.delete(key);
       hasExpired = true;
     }
   });
-  
+
   if (hasExpired) {
     saveParsedLinksCache();
     console.log('已清理过期缓存');
@@ -1470,16 +1904,16 @@ function createIcon(src, title) {
   const icon = document.createElement('img');
   icon.style.cssText = STYLES.ICON;
   icon.title = title;
-  
+
   // 添加错误处理
   icon.onerror = () => {
     // 创建一个默认的占位图标
     icon.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNiIgaGVpZ2h0PSIxNiIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IiM2NjY2NjYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIxMCIvPjxsaW5lIHgxPSIxMiIgeTE9IjgiIHgyPSIxMiIgeTI9IjE2Ii8+PGxpbmUgeDE9IjgiIHkxPSIxMiIgeDI9IjE2IiB5Mj0iMTIiLz48L3N2Zz4=';
   };
-  
+
   // 设置图标源
   icon.src = chrome.runtime.getURL(src);
-  
+
   return icon;
 }
 
@@ -1566,7 +2000,7 @@ function createCacheTable(gameName) {
       const link = document.createElement('a');
       link.href = files[0].url;
       link.target = '_blank';
-      const shortUrl = files[0].url.length > 50 
+      const shortUrl = files[0].url.length > 50
         ? files[0].url.substring(0, 47) + '...'
         : files[0].url;
       link.textContent = shortUrl;
@@ -1607,10 +2041,6 @@ function createCacheTable(gameName) {
       };
       actionCell.appendChild(downloadButton);
       row.appendChild(actionCell);
-      // 展开列（空）
-      const expandCell = document.createElement('td');
-      expandCell.style.cssText = STYLES.TABLE_CELL;
-      row.appendChild(expandCell);
       tbody.appendChild(row);
     } else {
       // 多文件，分组折叠
@@ -1710,7 +2140,7 @@ function createCacheTable(gameName) {
             const link = document.createElement('a');
             link.href = downloadUrl.url;
             link.target = '_blank';
-            const shortUrl = downloadUrl.url.length > 50 
+            const shortUrl = downloadUrl.url.length > 50
               ? downloadUrl.url.substring(0, 47) + '...'
               : downloadUrl.url;
             link.textContent = shortUrl;
@@ -1792,13 +2222,13 @@ function createCacheTable(gameName) {
 function createExpandButton(container, gameName) {
   const button = document.createElement('button');
   button.style.cssText = STYLES.EXPAND_BUTTON;
-  
+
   const icon = createIcon('images/unfold.png', '展开缓存文件列表');
   button.appendChild(icon);
-  
+
   let isExpanded = false;
   let tableContainer = null;
-  
+
   button.onclick = () => {
     if (!isExpanded) {
       // 创建表格
@@ -1818,7 +2248,7 @@ function createExpandButton(container, gameName) {
     }
     isExpanded = !isExpanded;
   };
-  
+
   return button;
 }
 
@@ -1851,7 +2281,7 @@ function isModDescriptionPage(url) {
 function initAIAnalyzer() {
     if (!aiModAnalyzer) {
         console.log('开始初始化AI分析器...');
-        
+
         // 使用 chrome.scripting.executeScript 注入脚本
         chrome.runtime.sendMessage({ action: 'injectAIAnalyzer' }, (response) => {
             if (response && response.success) {

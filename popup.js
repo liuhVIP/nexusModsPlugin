@@ -10,8 +10,8 @@ const STATUS_MESSAGES = {
 const STORAGE_KEYS = {
   STANDARD_URL_ENABLED: 'standardUrlEnabled',
   GAME_LIST_URL_ENABLED: 'gameListUrlEnabled',
-  MAX_CONCURRENT_REQUESTS: 'maxConcurrentRequests',
-  REQUEST_DELAY: 'requestDelay'
+  REQUEST_DELAY: 'requestDelay', //模组间的请求间隔时间（默认5000毫秒）
+  FILE_REQUEST_DELAY: 'fileRequestDelay'//模组内文件间的请求间隔时间
 };
 
 // 页面类型常量和提示文本常量
@@ -85,29 +85,29 @@ function saveUrlSettings(standardUrlEnabled, gameListUrlEnabled) {
 }
 
 // 保存高级设置到本地存储
-function saveAdvancedSettings(maxConcurrentRequests, requestDelay) {
+function saveAdvancedSettings(requestDelay, fileRequestDelay) {
   chrome.storage.local.set({
-    [STORAGE_KEYS.MAX_CONCURRENT_REQUESTS]: maxConcurrentRequests,
-    [STORAGE_KEYS.REQUEST_DELAY]: requestDelay
+    [STORAGE_KEYS.REQUEST_DELAY]: requestDelay,
+    [STORAGE_KEYS.FILE_REQUEST_DELAY]: fileRequestDelay
   }, () => {
-    console.log('高级设置已保存:', { maxConcurrentRequests, requestDelay });
+    console.log('高级设置已保存:', { requestDelay, fileRequestDelay });
   });
 }
 
 // 从本地存储加载URL监听设置
 function loadUrlSettings() {
   chrome.storage.local.get([
-    STORAGE_KEYS.STANDARD_URL_ENABLED, 
+    STORAGE_KEYS.STANDARD_URL_ENABLED,
     STORAGE_KEYS.GAME_LIST_URL_ENABLED
   ], (result) => {
     // 默认标准URL监听开启，游戏列表URL监听关闭
-    const standardUrlEnabled = result[STORAGE_KEYS.STANDARD_URL_ENABLED] !== undefined 
-      ? result[STORAGE_KEYS.STANDARD_URL_ENABLED] 
+    const standardUrlEnabled = result[STORAGE_KEYS.STANDARD_URL_ENABLED] !== undefined
+      ? result[STORAGE_KEYS.STANDARD_URL_ENABLED]
       : true;
-    const gameListUrlEnabled = result[STORAGE_KEYS.GAME_LIST_URL_ENABLED] !== undefined 
-      ? result[STORAGE_KEYS.GAME_LIST_URL_ENABLED] 
+    const gameListUrlEnabled = result[STORAGE_KEYS.GAME_LIST_URL_ENABLED] !== undefined
+      ? result[STORAGE_KEYS.GAME_LIST_URL_ENABLED]
       : false;
-    
+
     // 更新UI
     document.getElementById('standardUrlSwitch').checked = standardUrlEnabled;
     document.getElementById('gameListUrlSwitch').checked = gameListUrlEnabled;
@@ -117,41 +117,41 @@ function loadUrlSettings() {
 // 从本地存储加载高级设置
 function loadAdvancedSettings() {
   chrome.storage.local.get([
-    STORAGE_KEYS.MAX_CONCURRENT_REQUESTS, 
-    STORAGE_KEYS.REQUEST_DELAY
+    STORAGE_KEYS.REQUEST_DELAY,
+    STORAGE_KEYS.FILE_REQUEST_DELAY
   ], (result) => {
-    // 默认值：1个并发请求，2500毫秒间隔
-    const maxConcurrentRequests = result[STORAGE_KEYS.MAX_CONCURRENT_REQUESTS] !== undefined 
-      ? result[STORAGE_KEYS.MAX_CONCURRENT_REQUESTS] 
-      : 1;
-    const requestDelay = result[STORAGE_KEYS.REQUEST_DELAY] !== undefined 
-      ? result[STORAGE_KEYS.REQUEST_DELAY] 
-      : 2500;
-    
+    // 默认值：5000毫秒间隔，2000毫秒文件请求间隔
+    const requestDelay = result[STORAGE_KEYS.REQUEST_DELAY] !== undefined
+      ? result[STORAGE_KEYS.REQUEST_DELAY]
+      : 5000;
+    const fileRequestDelay = result[STORAGE_KEYS.FILE_REQUEST_DELAY] !== undefined
+      ? result[STORAGE_KEYS.FILE_REQUEST_DELAY]
+      : 2000;
+
     // 更新UI
-    document.getElementById('maxConcurrentRequests').value = maxConcurrentRequests;
     document.getElementById('requestDelay').value = requestDelay;
+    document.getElementById('fileRequestDelay').value = fileRequestDelay;
   });
 }
 
 // 添加授权状态检查函数
 async function checkAuthStatus() {
   const authStatusDiv = document.getElementById('authStatus');
-  
+
   // 先检查缓存中的授权状态
   const cachedAuth = await getCachedAuthStatus();
   if (cachedAuth) {
     updateAuthStatusDisplay(authStatusDiv, true);
     return;
   }
-  
+
   // 如果没有缓存或缓存已过期，进行新的授权检查
   try {
     // 发送消息给background.js获取测试下载链接
     chrome.runtime.sendMessage({
       action: "getAllDownloadUrls",
       modId: AUTH.TEST_MOD_ID,
-      gameName: AUTH.GAME_NAME 
+      gameName: AUTH.GAME_NAME
     }, (response) => {
       if (response.success && response.downloadUrls && response.downloadUrls.length > 0) {
         // 授权成功，更新缓存
@@ -176,7 +176,7 @@ function getCachedAuthStatus() {
       if (result[AUTH.CACHE_KEY]) {
         const { isAuthorized, timestamp } = result[AUTH.CACHE_KEY];
         const now = Date.now();
-        
+
         // 检查缓存是否过期
         if (now - timestamp < AUTH.CACHE_EXPIRATION) {
           resolve(isAuthorized);
@@ -271,7 +271,7 @@ async function getOnlineCount() {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
     const data = await response.json();
-    
+
     if (data.code === 200) {
       return data.data || 0;
     }
@@ -299,7 +299,7 @@ async function updateOnlineCount() {
 function startOnlineCountUpdate() {
   // 立即更新一次
   updateOnlineCount();
-  
+
   // 每30秒更新一次
   setInterval(updateOnlineCount, 30000);
 }
@@ -334,57 +334,57 @@ document.addEventListener('DOMContentLoaded', function() {
 document.addEventListener('DOMContentLoaded', () => {
   // 检查授权状态
   checkAuthStatus();
-  
+
   // 加载URL监听设置
   loadUrlSettings();
-  
+
   // 加载高级设置
   loadAdvancedSettings();
-  
+
   // 添加URL监听开关事件监听
   document.getElementById('standardUrlSwitch').addEventListener('change', (e) => {
     const standardUrlEnabled = e.target.checked;
     const gameListUrlEnabled = document.getElementById('gameListUrlSwitch').checked;
     saveUrlSettings(standardUrlEnabled, gameListUrlEnabled);
-    
+
     // 刷新当前标签页
     reloadCurrentTab();
   });
-  
+
   document.getElementById('gameListUrlSwitch').addEventListener('change', (e) => {
     const gameListUrlEnabled = e.target.checked;
-    
+
     // 如果用户尝试开启游戏列表监听，显示风险确认对话框
     if (gameListUrlEnabled) {
       const confirmed = confirm('提示：游戏列表监听功能已优化，将使用限流机制获取模组链接（默认单线程，间隔2.5秒），降低触发网站防护机制的风险。您可以在高级设置中调整参数。是否继续？');
-      
+
       // 如果用户取消，则恢复开关状态并返回
       if (!confirmed) {
         e.target.checked = false;
         return;
       }
     }
-    
+
     const standardUrlEnabled = document.getElementById('standardUrlSwitch').checked;
     saveUrlSettings(standardUrlEnabled, e.target.checked);
-    
+
     // 刷新当前标签页
     reloadCurrentTab();
   });
-  
+
   // 添加高级设置事件监听
-  document.getElementById('maxConcurrentRequests').addEventListener('change', (e) => {
-    const maxConcurrentRequests = parseInt(e.target.value);
-    const requestDelay = parseInt(document.getElementById('requestDelay').value);
-    saveAdvancedSettings(maxConcurrentRequests, requestDelay);
-  });
-  
   document.getElementById('requestDelay').addEventListener('change', (e) => {
     const requestDelay = parseInt(e.target.value);
-    const maxConcurrentRequests = parseInt(document.getElementById('maxConcurrentRequests').value);
-    saveAdvancedSettings(maxConcurrentRequests, requestDelay);
+    const fileRequestDelay = parseInt(document.getElementById('fileRequestDelay').value);
+    saveAdvancedSettings(requestDelay, fileRequestDelay);
   });
-  
+
+  document.getElementById('fileRequestDelay').addEventListener('change', (e) => {
+    const fileRequestDelay = parseInt(e.target.value);
+    const requestDelay = parseInt(document.getElementById('requestDelay').value);
+    saveAdvancedSettings(requestDelay, fileRequestDelay);
+  });
+
   // 添加清除缓存按钮的点击事件
   document.getElementById('clearCacheBtn').addEventListener('click', () => {
     // 获取当前标签页
@@ -407,7 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
-  
+
   const statusDiv = document.getElementById('status');
   const directLinkDiv = document.getElementById('directLink');
 
@@ -433,7 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
           statusDiv.textContent = STATUS_MESSAGES.SUCCESS;
           statusDiv.className = 'status-success';
 
-         
+
 
         } else {
           statusDiv.textContent = STATUS_MESSAGES.ERROR_CANNOT_GET_LINK;
@@ -470,4 +470,4 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.windows.remove(sender.tab.windowId);
     }
   });
-}); 
+});

@@ -4,9 +4,9 @@
   <title>Nexus Mods 直链</title>
   <meta charset="UTF-8">
   <style>
-    body { 
-      width: 500px; 
-      padding: 20px; 
+    body {
+      width: 500px;
+      padding: 20px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
       background-color: #f5f5f5;
       margin: 0;
@@ -188,7 +188,7 @@
       width: 20px;
       height: 20px;
     }
-    
+
     /* 加载动画样式 */
     .loading-spinner {
       width: 20px;
@@ -198,12 +198,12 @@
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
-    
+
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    
+
     /* 推荐工具样式 */
     .tools-list {
       display: flex;
@@ -211,7 +211,7 @@
       gap: 12px;
       margin-top: 10px;
     }
-    
+
     .tool-item {
       display: flex;
       align-items: center;
@@ -222,12 +222,12 @@
       color: inherit;
       transition: all 0.3s ease;
     }
-    
+
     .tool-item:hover {
       background: #e8f0fe;
       transform: translateY(-2px);
     }
-    
+
     .tool-icon {
       font-size: 24px;
       margin-right: 12px;
@@ -240,17 +240,17 @@
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    
+
     .tool-info {
       flex: 1;
     }
-    
+
     .tool-name {
       font-weight: 600;
       color: #1a73e8;
       margin-bottom: 4px;
     }
-    
+
     .tool-desc {
       font-size: 13px;
       color: #666;
@@ -293,7 +293,7 @@
     .tools-container details[open] summary::before {
       transform: rotate(90deg);
     }
-    
+
     /* 开关样式 */
     .settings-container {
       background: white;
@@ -302,13 +302,13 @@
       margin-bottom: 15px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
-    
+
     .settings-title {
       font-weight: 600;
       color: #1a73e8;
       margin-bottom: 12px;
     }
-    
+
     .settings-item {
       display: flex;
       justify-content: space-between;
@@ -316,28 +316,28 @@
       padding: 8px 0;
       border-bottom: 1px solid #f0f0f0;
     }
-    
+
     .settings-item:last-child {
       border-bottom: none;
     }
-    
+
     .settings-label {
       font-size: 14px;
     }
-    
+
     .switch {
       position: relative;
       display: inline-block;
       width: 44px;
       height: 24px;
     }
-    
+
     .switch input {
       opacity: 0;
       width: 0;
       height: 0;
     }
-    
+
     .slider {
       position: absolute;
       cursor: pointer;
@@ -349,7 +349,7 @@
       transition: .3s;
       border-radius: 24px;
     }
-    
+
     .slider:before {
       position: absolute;
       content: "";
@@ -361,11 +361,11 @@
       transition: .3s;
       border-radius: 50%;
     }
-    
+
     input:checked + .slider {
       background-color: #1a73e8;
     }
-    
+
     input:checked + .slider:before {
       transform: translateX(20px);
     }
@@ -376,12 +376,12 @@
       align-items: center;
       width: 100%;
     }
-    
+
     .table-title {
       font-weight: 600;
       color: #333;
     }
-    
+
     #copyAllBtnContainer {
       margin: 0;
     }
@@ -447,13 +447,13 @@
     .sponsor-container {
       padding: 15px;
     }
-    
+
     .sponsor-images {
       display: flex;
       justify-content: space-around;
       gap: 10px;
     }
-    
+
     .sponsor-img {
       width: 120px;
       height: 120px;
@@ -463,7 +463,7 @@
       transition: all 0.3s ease;
       box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
-    
+
     .sponsor-img:hover {
       transform: scale(1.05);
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
@@ -560,16 +560,17 @@
       <details>
         <summary>游戏列表页面请求控制</summary>
         <div style="padding: 10px 0;">
-          <div class="settings-item">
-            <div class="settings-label">最大并发请求数</div>
-            <input type="number" id="maxConcurrentRequests" min="1" max="5" value="1" style="width: 60px; text-align: center;">
-          </div>
+
           <div class="settings-item">
             <div class="settings-label">请求间隔时间(毫秒)</div>
-            <input type="number" id="requestDelay" min="500" max="5000" step="100" value="2500" style="width: 80px; text-align: center;">
+            <input type="number" id="requestDelay" min="500" max="5000" step="100" value="5000" style="width: 80px; text-align: center;">
+          </div>
+          <div class="settings-item">
+            <div class="settings-label">文件请求间隔时间(毫秒)</div>
+            <input type="number" id="fileRequestDelay" min="500" max="5000" step="100" value="2000" style="width: 80px; text-align: center;">
           </div>
           <div style="font-size: 12px; color: #666; margin-top: 10px;">
-            提示：较低的并发数和较长的间隔时间可以减少被网站拦截的风险，但会增加获取链接的总时间。
+            提示：较长的间隔时间可以减少被网站拦截的风险，但会增加获取链接的总时间。
           </div>
           <div class="settings-item" style="margin-top: 15px; flex-direction: column; align-items: center; border-bottom: none;">
             <button id="clearCacheBtn" style="
@@ -597,7 +598,7 @@
     <div class="loading-spinner"></div>
     <span>正在检查授权状态...</span>
   </div>
-  
+
   <div id="status" class="status-loading">请访问模组详情页...</div>
   <div id="directLink">
 
@@ -654,4 +655,4 @@
   <script src="lib/marked.min.js"></script>
   <script src="popup.js"></script>
 </body>
-</html> 
+</html>
