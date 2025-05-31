@@ -453,7 +453,7 @@ class AIModAnalyzer {
             }, 1500);
 
         } catch (error) {
-            console.error('分析模组时出错:', error);
+            // console.error('分析模组时出错:', error);
             this.setLoadingState(false);
             // 可以在这里添加用户提示，例如：
             // alert('获取模组数据失败，请稍后再试。');

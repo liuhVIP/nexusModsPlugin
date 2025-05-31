@@ -1492,22 +1492,252 @@ function displayDirectLinksInModTile(modTile, downloadUrls, fullUrl, cachedLoadi
     flex-shrink: 0;
   `;
 
-  // 文件数量（如果多个文件）
-  if (downloadUrls.length > 1) {
-    const fileCount = document.createElement('span');
-    fileCount.style.cssText = `
-      font-size: 11px;
-      color: #64748b;
-      background: #f1f5f9;
-      padding: 2px 6px;
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      gap: 2px;
-    `;
-    fileCount.innerHTML = `📁 ${downloadUrls.length}个文件`;
-    rightInfo.appendChild(fileCount);
-  }
+  // 文件数量（总是显示，即使只有1个文件）
+  const fileCount = document.createElement('span');
+  fileCount.style.cssText = `
+    font-size: 11px;
+    color: #64748b;
+    background: #f1f5f9;
+    padding: 2px 6px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+  `;
+  fileCount.innerHTML = `📁 ${downloadUrls.length}个文件`;
+
+  // 添加悬停事件，显示文件详情弹窗
+  let hoverTimeout;
+  let tooltip = null;
+  let isMouseOverTooltip = false;
+
+  fileCount.addEventListener('mouseenter', () => {
+    // 添加悬停背景效果
+    fileCount.style.backgroundColor = '#e2e8f0';
+    // 清除之前的定时器
+    clearTimeout(hoverTimeout);
+
+    hoverTimeout = setTimeout(() => {
+      // 如果悬浮窗已存在，不重复创建
+      if (tooltip) return;
+
+      // 创建悬浮窗
+      tooltip = document.createElement('div');
+      tooltip.style.cssText = `
+        position: fixed;
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 12px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        z-index: 10000;
+        max-width: 400px;
+        font-size: 12px;
+        line-height: 1.4;
+      `;
+
+      // 为悬浮窗添加鼠标事件
+      tooltip.addEventListener('mouseenter', () => {
+        isMouseOverTooltip = true;
+      });
+
+      tooltip.addEventListener('mouseleave', () => {
+        isMouseOverTooltip = false;
+        // 延迟隐藏，给用户时间移回触发元素
+        setTimeout(() => {
+          if (!isMouseOverTooltip && tooltip) {
+            tooltip.remove();
+            tooltip = null;
+          }
+        }, 100);
+      });
+
+      // 添加标题行（包含标题和全部复制按钮）
+      const titleRow = document.createElement('div');
+      titleRow.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+        border-bottom: 1px solid #f0f0f0;
+        padding-bottom: 4px;
+      `;
+
+      // 标题文本
+      const title = document.createElement('div');
+      title.style.cssText = `
+        font-weight: 600;
+        color: #333;
+      `;
+      title.textContent = `文件列表 (${downloadUrls.length}个)`;
+
+      titleRow.appendChild(title);
+
+      // 全部复制按钮（如果有多个文件）
+      if (downloadUrls.length > 1) {
+        const copyAllBtn = document.createElement('img');
+        copyAllBtn.src = chrome.runtime.getURL('static/copy-all.png');
+        copyAllBtn.alt = '全部复制';
+        copyAllBtn.title = `复制全部 ${downloadUrls.length} 个文件链接`;
+        copyAllBtn.style.cssText = `
+          width: 16px;
+          height: 16px;
+          cursor: pointer;
+          opacity: 0.7;
+          transition: opacity 0.2s ease;
+        `;
+
+        // 悬停效果
+        copyAllBtn.addEventListener('mouseenter', () => {
+          copyAllBtn.style.opacity = '1';
+        });
+        copyAllBtn.addEventListener('mouseleave', () => {
+          copyAllBtn.style.opacity = '0.7';
+        });
+
+        // 点击事件
+        copyAllBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          // 将所有URL用换行符连接
+          const allUrls = downloadUrls.map(item => item.url).join('\n');
+
+          navigator.clipboard.writeText(allUrls).then(() => {
+            // 显示复制成功提示
+            const originalSrc = copyAllBtn.src;
+            copyAllBtn.src = chrome.runtime.getURL('static/success.png');
+            copyAllBtn.title = '已复制全部文件链接!';
+
+            setTimeout(() => {
+              copyAllBtn.src = originalSrc;
+              copyAllBtn.title = `复制全部 ${downloadUrls.length} 个文件链接`;
+            }, 1500);
+          }).catch(() => {
+            // 复制失败提示
+            const originalSrc = copyAllBtn.src;
+            copyAllBtn.src = chrome.runtime.getURL('static/error.png');
+            copyAllBtn.title = '复制失败';
+
+            setTimeout(() => {
+              copyAllBtn.src = originalSrc;
+              copyAllBtn.title = `复制全部 ${downloadUrls.length} 个文件链接`;
+            }, 1500);
+          });
+        });
+
+        titleRow.appendChild(copyAllBtn);
+      }
+
+      tooltip.appendChild(titleRow);
+
+      // 添加文件列表
+      downloadUrls.forEach((downloadUrl, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.style.cssText = `
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 4px 0;
+          border-bottom: ${index < downloadUrls.length - 1 ? '1px solid #f5f5f5' : 'none'};
+        `;
+
+        // 文件名（可点击下载）
+        const fileName = document.createElement('a');
+        fileName.href = downloadUrl.url;
+        fileName.target = '_blank';
+        fileName.style.cssText = `
+          flex: 1;
+          color: #3b82f6;
+          text-decoration: none;
+          font-weight: 500;
+          cursor: pointer;
+          word-break: break-all;
+        `;
+        fileName.textContent = getFilenameFromUrl(downloadUrl.url);
+        fileName.addEventListener('mouseenter', () => {
+          fileName.style.color = '#2563eb';
+          fileName.style.textDecoration = 'underline';
+        });
+        fileName.addEventListener('mouseleave', () => {
+          fileName.style.color = '#3b82f6';
+          fileName.style.textDecoration = 'none';
+        });
+
+        // 复制按钮
+        const copyBtn = document.createElement('img');
+        copyBtn.src = chrome.runtime.getURL('static/copy.png');
+        copyBtn.alt = '复制';
+        copyBtn.style.cssText = `
+          width: 16px;
+          height: 16px;
+          cursor: pointer;
+          opacity: 0.7;
+          transition: opacity 0.2s ease;
+        `;
+        copyBtn.addEventListener('mouseenter', () => {
+          copyBtn.style.opacity = '1';
+        });
+        copyBtn.addEventListener('mouseleave', () => {
+          copyBtn.style.opacity = '0.7';
+        });
+        copyBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          navigator.clipboard.writeText(downloadUrl.url).then(() => {
+            // 显示复制成功提示
+            const originalSrc = copyBtn.src;
+            copyBtn.src = chrome.runtime.getURL('static/success.png');
+            setTimeout(() => {
+              copyBtn.src = originalSrc;
+            }, 1000);
+          }).catch(() => {
+            // 复制失败提示
+            const originalSrc = copyBtn.src;
+            copyBtn.src = chrome.runtime.getURL('static/error.png');
+            setTimeout(() => {
+              copyBtn.src = originalSrc;
+            }, 1000);
+          });
+        });
+
+        fileItem.appendChild(fileName);
+        fileItem.appendChild(copyBtn);
+        tooltip.appendChild(fileItem);
+      });
+
+
+
+      // 计算位置
+      const rect = fileCount.getBoundingClientRect();
+      const tooltipLeft = Math.min(rect.left, window.innerWidth - 420); // 确保不超出右边界
+      const tooltipTop = rect.bottom + 5; // 在元素下方5px
+
+      tooltip.style.left = tooltipLeft + 'px';
+      tooltip.style.top = tooltipTop + 'px';
+
+      document.body.appendChild(tooltip);
+    }, 200); // 减少延迟到200ms
+  });
+
+  fileCount.addEventListener('mouseleave', () => {
+    // 恢复背景色
+    fileCount.style.backgroundColor = '#f1f5f9';
+    // 清除定时器
+    clearTimeout(hoverTimeout);
+
+    // 延迟隐藏悬浮窗，给用户时间移动到悬浮窗上
+    setTimeout(() => {
+      if (!isMouseOverTooltip && tooltip) {
+        tooltip.remove();
+        tooltip = null;
+      }
+    }, 200); // 200ms延迟隐藏
+  });
+
+  rightInfo.appendChild(fileCount);
 
   // 加载时间
   if (loadingTime !== null) {
@@ -2200,10 +2430,106 @@ function createCacheTable(gameName) {
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
   const headers = ['序号', 'Mod ID', '文件名称/数量', '直链链接', '操作', '展开'];
-  headers.forEach(headerText => {
+  headers.forEach((headerText) => {
     const th = document.createElement('th');
     th.style.cssText = STYLES.TABLE_HEADER;
-    th.textContent = headerText;
+
+    // 在操作列添加一键复制按钮
+    if (headerText === '操作') {
+      const headerContainer = document.createElement('div');
+      headerContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      `;
+
+      const headerText = document.createElement('span');
+      headerText.textContent = '操作';
+      headerContainer.appendChild(headerText);
+
+      // 一键复制所有链接按钮
+      const copyAllBtn = document.createElement('button');
+      copyAllBtn.style.cssText = `
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 2px;
+        display: flex;
+        align-items: center;
+        opacity: 0.7;
+        transition: opacity 0.2s ease;
+      `;
+      copyAllBtn.title = '复制当前游戏所有缓存文件链接';
+
+      const copyAllIcon = createIcon('static/copy-all.png', '复制所有链接');
+      copyAllBtn.appendChild(copyAllIcon);
+
+      // 悬停效果
+      copyAllBtn.addEventListener('mouseenter', () => {
+        copyAllBtn.style.opacity = '1';
+      });
+      copyAllBtn.addEventListener('mouseleave', () => {
+        copyAllBtn.style.opacity = '0.7';
+      });
+
+      // 点击复制所有链接
+      copyAllBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // 收集当前游戏的所有文件链接
+        const allUrls = [];
+        Array.from(parsedLinksCache.entries())
+          .filter(([key]) => key.startsWith(`${gameName}_`))
+          .forEach(([, value]) => {
+            (value.downloadUrls || []).forEach(downloadUrl => {
+              allUrls.push(downloadUrl.url);
+            });
+          });
+
+        if (allUrls.length === 0) {
+          // 没有链接时的提示
+          copyAllIcon.src = chrome.runtime.getURL('static/error.png');
+          copyAllBtn.title = '没有可复制的链接';
+          setTimeout(() => {
+            copyAllIcon.src = chrome.runtime.getURL('static/copy-all.png');
+            copyAllBtn.title = '复制当前游戏所有缓存文件链接';
+          }, 1500);
+          return;
+        }
+
+        // 复制所有链接（用换行符分隔）
+        const allUrlsText = allUrls.join('\n');
+        navigator.clipboard.writeText(allUrlsText).then(() => {
+          // 成功反馈
+          const originalSrc = copyAllIcon.src;
+          copyAllIcon.src = chrome.runtime.getURL('static/success.png');
+          copyAllBtn.title = `已复制 ${allUrls.length} 个文件链接!`;
+
+          setTimeout(() => {
+            copyAllIcon.src = originalSrc;
+            copyAllBtn.title = '复制当前游戏所有缓存文件链接';
+          }, 2000);
+        }).catch(() => {
+          // 失败反馈
+          const originalSrc = copyAllIcon.src;
+          copyAllIcon.src = chrome.runtime.getURL('static/error.png');
+          copyAllBtn.title = '复制失败';
+
+          setTimeout(() => {
+            copyAllIcon.src = originalSrc;
+            copyAllBtn.title = '复制当前游戏所有缓存文件链接';
+          }, 1500);
+        });
+      });
+
+      headerContainer.appendChild(copyAllBtn);
+      th.appendChild(headerContainer);
+    } else {
+      th.textContent = headerText;
+    }
+
     headerRow.appendChild(th);
   });
   thead.appendChild(headerRow);
