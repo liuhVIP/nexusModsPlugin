@@ -28,22 +28,290 @@ marked.setOptions({
   renderer: new marked.Renderer() // 创建自定义渲染器
 });
 
+// 工具函数：检查是否为图片URL
+function isImageUrl(url) {
+  if (!url) return false;
+
+  // 检查文件扩展名（包括查询参数的情况）
+  const imageExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?.*)?$/i;
+  if (imageExtensions.test(url)) {
+    return true;
+  }
+
+  // 检查URL路径中是否包含图片扩展名（处理复杂URL结构）
+  const pathImageExtensions = /\.(jpg|jpeg|png|gif|webp|bmp|svg)/i;
+  if (pathImageExtensions.test(url)) {
+    return true;
+  }
+
+  // 检查常见的图片托管服务
+  const imageHosts = [
+    'imgur.com',
+    'i.imgur.com',
+    'cdn.discordapp.com',
+    'media.discordapp.net',
+    'i.redd.it',
+    'preview.redd.it',
+    'staticdelivery.nexusmods.com',
+    'images.nexusmods.com',
+    'github.com',
+    'raw.githubusercontent.com',
+    'user-images.githubusercontent.com',
+    'avatars.githubusercontent.com',
+    'camo.githubusercontent.com',
+    'steamuserimages-a.akamaihd.net',
+    'steamcdn-a.akamaihd.net',
+    'cloud.githubusercontent.com'
+  ];
+
+  try {
+    const urlObj = new URL(url);
+    return imageHosts.some(host => urlObj.hostname.includes(host));
+  } catch {
+    return false;
+  }
+}
+
+// 工具函数：安全地转义HTML属性
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// 调试函数：测试内容处理
+function debugContentProcessing(content) {
+  console.group('内容处理调试');
+  console.log('原始内容:', content);
+
+  // 测试图片URL检测
+  const urls = content.match(/(https?:\/\/[^\s<>"']+)/gi) || [];
+  urls.forEach(url => {
+    console.log(`URL: ${url}, 是否为图片: ${isImageUrl(url)}`);
+  });
+
+  const processed = postProcessContent(content);
+  console.log('后处理结果:', processed);
+
+  try {
+    const rendered = marked.parse(processed);
+    console.log('Markdown渲染结果:', rendered);
+  } catch (error) {
+    console.error('Markdown渲染错误:', error);
+  }
+
+  console.groupEnd();
+  return processed;
+}
+
+// 工具函数：后处理内容，将裸露的图片链接转换为图片
+function postProcessContent(content) {
+  if (!content) return content;
+
+  // 保存原始内容用于调试
+  const originalContent = content;
+
+  try {
+    // 先收集所有已存在的markdown语法，避免重复处理
+    const existingMarkdown = [];
+
+    // 收集现有的图片语法 ![...](...)
+    const imageRegex = /!\[[^\]]*\]\([^)]+\)/g;
+    let match;
+    while ((match = imageRegex.exec(content)) !== null) {
+      existingMarkdown.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        type: 'image'
+      });
+    }
+
+    // 收集现有的链接语法 [...](...)
+    const linkRegex = /(?<!!)\[[^\]]*\]\([^)]+\)/g;
+    while ((match = linkRegex.exec(content)) !== null) {
+      existingMarkdown.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        type: 'link'
+      });
+    }
+
+    // 按位置排序
+    existingMarkdown.sort((a, b) => a.start - b.start);
+
+    // 查找所有可能的图片URL
+    const urlRegex = /(https?:\/\/[^\s<>"'\[\]()]+)/gi;
+    const urlMatches = [];
+
+    while ((match = urlRegex.exec(content)) !== null) {
+      const url = match[1];
+      const start = match.index;
+      const end = start + url.length;
+
+      // 检查这个URL是否在已存在的markdown语法中
+      const isInExistingMarkdown = existingMarkdown.some(md =>
+        start >= md.start && end <= md.end
+      );
+
+      // 如果不在现有markdown中，且是图片URL，则标记为需要转换
+      if (!isInExistingMarkdown && isImageUrl(url)) {
+        urlMatches.push({
+          start,
+          end,
+          url,
+          original: match[0]
+        });
+      }
+    }
+
+    // 从后往前替换，避免位置偏移
+    urlMatches.reverse().forEach(urlMatch => {
+      const before = content.substring(0, urlMatch.start);
+      const after = content.substring(urlMatch.end);
+
+      // 再次检查前后文，确保安全
+      // 检查是否在代码块中
+      const codeBlockRegex = /```[\s\S]*?```|`[^`]*`/g;
+      let inCodeBlock = false;
+      let codeMatch;
+      while ((codeMatch = codeBlockRegex.exec(originalContent)) !== null) {
+        if (urlMatch.start >= codeMatch.index && urlMatch.end <= codeMatch.index + codeMatch[0].length) {
+          inCodeBlock = true;
+          break;
+        }
+      }
+
+      if (!inCodeBlock) {
+        // 转换为markdown图片语法
+        content = before + `![图片](${urlMatch.url})` + after;
+      }
+    });
+
+    return content;
+
+  } catch (error) {
+    console.error('后处理内容时出错:', error);
+    // 如果处理出错，返回原始内容
+    return originalContent;
+  }
+}
+
 // 配置链接和图片渲染
 marked.use({
   renderer: {
-    link(href, title, text) {
-      return `<a href="${href}" target="_blank" rel="noopener noreferrer" ${title ? `title="${title}"` : ''}>${text}</a>`;
+    // 处理普通文本段落
+    paragraph(text) {
+      return `<p>${text}</p>`;
     },
-    image(href, title, text) {
-      // 检查是否是图片链接
-      const isImageUrl = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(href);
-      if (isImageUrl) {
+
+    // 处理链接
+    link(href, title, text) {
+      // 检查链接是否指向图片
+      if (isImageUrl(href)) {
+        // 如果链接指向图片，渲染为图片而不是链接
+        const safeHref = escapeHtml(href);
+        const safeTitle = title ? escapeHtml(title) : '';
+        const safeAlt = escapeHtml(text || '图片');
+
         return `<div class="message-image-container">
-          <img src="${href}" alt="${text || '图片'}" class="message-image" loading="lazy" ${title ? `title="${title}"` : ''}>
+          <img src="${safeHref}" alt="${safeAlt}" class="message-image" loading="lazy" ${title ? `title="${safeTitle}"` : ''}
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+          <div style="display:none; padding: 20px; text-align: center; background: #f5f5f5; border-radius: 8px; color: #666;">
+            <p>图片加载失败</p>
+            <a href="${safeHref}" target="_blank" rel="noopener noreferrer" style="color: #1976d2; text-decoration: underline;">点击查看原图</a>
+          </div>
+        </div>`;
+      }
+
+      // 如果不是图片链接，渲染为普通链接
+      const safeHref = escapeHtml(href);
+      const safeTitle = title ? escapeHtml(title) : '';
+      const safeText = escapeHtml(text);
+
+      return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" ${title ? `title="${safeTitle}"` : ''}>${safeText}</a>`;
+    },
+
+    // 处理图片
+    image(href, title, text) {
+      // 使用改进的图片检测函数
+      if (isImageUrl(href)) {
+        const safeHref = escapeHtml(href);
+        const safeTitle = title ? escapeHtml(title) : '';
+        const safeAlt = escapeHtml(text || '图片');
+
+        return `<div class="message-image-container">
+          <img src="${safeHref}" alt="${safeAlt}" class="message-image" loading="lazy" ${title ? `title="${safeTitle}"` : ''}
+               onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+          <div style="display:none; padding: 20px; text-align: center; background: #f5f5f5; border-radius: 8px; color: #666;">
+            <p>图片加载失败</p>
+            <a href="${safeHref}" target="_blank" rel="noopener noreferrer" style="color: #1976d2; text-decoration: underline;">点击查看原图</a>
+          </div>
         </div>`;
       }
       // 如果不是图片链接，返回普通链接
-      return `<a href="${href}" target="_blank" rel="noopener noreferrer" ${title ? `title="${title}"` : ''}>${text || href}</a>`;
+      const safeHref = escapeHtml(href);
+      const safeTitle = title ? escapeHtml(title) : '';
+      const safeText = escapeHtml(text || href);
+
+      return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer" ${title ? `title="${safeTitle}"` : ''}>${safeText}</a>`;
+    },
+
+    // 处理代码块
+    code(code, language) {
+      const validLanguage = language && language.match(/^[a-zA-Z0-9_+-]*$/);
+      const langClass = validLanguage ? ` class="language-${language}"` : '';
+      const safeCode = escapeHtml(code);
+
+      return `<pre><code${langClass}>${safeCode}</code></pre>`;
+    },
+
+    // 处理行内代码
+    codespan(code) {
+      const safeCode = escapeHtml(code);
+      return `<code>${safeCode}</code>`;
+    },
+
+    // 处理强调文本
+    strong(text) {
+      return `<strong>${text}</strong>`;
+    },
+
+    // 处理斜体文本
+    em(text) {
+      return `<em>${text}</em>`;
+    },
+
+    // 处理删除线
+    del(text) {
+      return `<del>${text}</del>`;
+    },
+
+    // 处理列表
+    list(body, ordered) {
+      const tag = ordered ? 'ol' : 'ul';
+      return `<${tag}>${body}</${tag}>`;
+    },
+
+    // 处理列表项
+    listitem(text) {
+      return `<li>${text}</li>`;
+    },
+
+    // 处理标题
+    heading(text, level) {
+      const safeText = text;
+      return `<h${level}>${safeText}</h${level}>`;
+    },
+
+    // 处理引用
+    blockquote(quote) {
+      return `<blockquote>${quote}</blockquote>`;
+    },
+
+    // 处理换行
+    br() {
+      return '<br>';
     }
   }
 });
@@ -361,28 +629,9 @@ const messageHandler = {
       markdownContent.appendChild(markdownCopyBtn);
     }
 
-    markdownContent.innerHTML = marked.parse(content);
-
-    // 为图片添加点击放大功能
-    if (!isUser) {
-      markdownContent.querySelectorAll('.message-image').forEach(img => {
-        img.style.cursor = 'pointer';
-        img.onclick = function(e) {
-          e.preventDefault();
-          // 使用现有的图片模态框显示逻辑
-          const imageModal = document.querySelector('.image-modal');
-          if (imageModal) {
-            imageModal.style.display = 'block';
-            const modalImg = document.createElement('img');
-            modalImg.src = this.src;
-            modalImg.alt = this.alt;
-            imageModal.innerHTML = '';
-            imageModal.appendChild(modalImg);
-          }
-        };
-      });
-    }
-
+    // 后处理内容，将裸露的图片链接转换为图片
+    const processedContent = postProcessContent(content);
+    markdownContent.innerHTML = marked.parse(processedContent);
     contentDiv.appendChild(markdownContent);
 
     // 声明 modDataSection 变量
@@ -569,12 +818,10 @@ const messageHandler = {
   // 添加或更新AI消息（包含思考内容和正式内容）
   updateAIMessage: (messageId, content, reasoningContent = null, isDone = false) => {
     let messageDiv = document.getElementById(`message-${messageId}`);
-    let isNew = false;
     if (!messageDiv) {
       messageDiv = document.createElement('div');
       messageDiv.className = 'message';
       messageDiv.id = `message-${messageId}`;
-      isNew = true;
 
       const avatar = document.createElement('div');
       avatar.className = 'message-avatar';
@@ -656,10 +903,13 @@ const messageHandler = {
     if (contentElement) {
       try {
         // 预处理内容
-        const processedContent = content
+        let processedContent = content
           .trim() // 去除首尾空白
           .replace(/\n{3,}/g, '\n\n') // 将3个以上的换行符替换为2个
           .replace(/^\n+|\n+$/g, ''); // 去除首尾的换行符
+
+        // 后处理内容，将裸露的图片链接转换为图片
+        processedContent = postProcessContent(processedContent);
 
         // 使用 marked 解析内容
         const parsedContent = marked.parse(processedContent);
@@ -673,24 +923,6 @@ const messageHandler = {
         if (copyBtn) {
           contentElement.appendChild(copyBtn);
         }
-
-        // 为图片添加点击放大功能
-        contentElement.querySelectorAll('.message-image').forEach(img => {
-          img.style.cursor = 'pointer';
-          img.onclick = function(e) {
-            e.preventDefault();
-            // 使用现有的图片模态框显示逻辑
-            const imageModal = document.querySelector('.image-modal');
-            if (imageModal) {
-              imageModal.style.display = 'block';
-              const modalImg = document.createElement('img');
-              modalImg.src = this.src;
-              modalImg.alt = this.alt;
-              imageModal.innerHTML = '';
-              imageModal.appendChild(modalImg);
-            }
-          };
-        });
 
         // 处理代码块
         contentElement.querySelectorAll('pre code').forEach((block) => {
@@ -731,10 +963,13 @@ const messageHandler = {
       if (reasoningElement) {
         try {
           // 预处理思考内容
-          const processedReasoning = reasoningContent
+          let processedReasoning = reasoningContent
             .trim()
             .replace(/\n{3,}/g, '\n\n')
             .replace(/^\n+|\n+$/g, '');
+
+          // 后处理思考内容，将裸露的图片链接转换为图片
+          processedReasoning = postProcessContent(processedReasoning);
 
           reasoningElement.innerHTML = marked.parse(processedReasoning);
         } catch (error) {
@@ -1144,6 +1379,45 @@ document.addEventListener('DOMContentLoaded', () => {
   imageModal.className = 'image-modal';
   document.body.appendChild(imageModal);
 
+  // 图片缩放状态
+  let currentScale = 1;
+  let currentModalImg = null;
+  let scaleIndicator = null;
+  const MIN_SCALE = 0.1;
+  const MAX_SCALE = 5;
+  const SCALE_STEP = 0.1;
+
+  // 重置图片缩放
+  function resetImageScale() {
+    currentScale = 1;
+    if (currentModalImg) {
+      currentModalImg.style.transform = 'translate(-50%, -50%) scale(1)';
+    }
+    updateScaleIndicator();
+  }
+
+  // 应用图片缩放
+  function applyImageScale(scale) {
+    if (currentModalImg) {
+      currentModalImg.style.transform = `translate(-50%, -50%) scale(${scale})`;
+    }
+    updateScaleIndicator();
+  }
+
+  // 更新缩放比例指示器
+  function updateScaleIndicator() {
+    if (scaleIndicator) {
+      const percentage = Math.round(currentScale * 100);
+      scaleIndicator.textContent = `${percentage}%`;
+
+      // 添加动画效果
+      scaleIndicator.style.transform = 'scale(1.1)';
+      setTimeout(() => {
+        scaleIndicator.style.transform = 'scale(1)';
+      }, 150);
+    }
+  }
+
   // 添加图片点击事件委托
   document.addEventListener('click', (e) => {
     if (e.target.classList.contains('message-image')) {
@@ -1152,13 +1426,162 @@ document.addEventListener('DOMContentLoaded', () => {
       // 创建并显示大图
       const modalImg = document.createElement('img');
       modalImg.src = e.target.src;
+      modalImg.style.transition = 'transform 0.2s ease';
+      modalImg.style.cursor = 'grab';
+
+      // 添加缩放提示
+      const zoomHint = document.createElement('div');
+      zoomHint.className = 'zoom-hint';
+      zoomHint.innerHTML = '💡 滚轮缩放 | 双击重置 | ESC关闭';
+
+      // 添加缩放比例指示器
+      const scaleIndicatorDiv = document.createElement('div');
+      scaleIndicatorDiv.className = 'scale-indicator';
+      scaleIndicatorDiv.textContent = '100%';
+
       imageModal.innerHTML = '';
       imageModal.appendChild(modalImg);
+      imageModal.appendChild(zoomHint);
+      imageModal.appendChild(scaleIndicatorDiv);
+
+      currentModalImg = modalImg;
+      scaleIndicator = scaleIndicatorDiv;
+      resetImageScale();
+
+      // 双击重置缩放
+      modalImg.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        resetImageScale();
+      });
+
+      // 添加键盘事件监听
+      const handleKeyDown = (e) => {
+        if (e.key === 'Escape') {
+          imageModal.style.display = 'none';
+          currentModalImg = null;
+          scaleIndicator = null;
+          document.removeEventListener('keydown', handleKeyDown);
+        } else if (e.key === '=' || e.key === '+') {
+          e.preventDefault();
+          const newScale = Math.min(MAX_SCALE, currentScale + SCALE_STEP);
+          if (newScale !== currentScale) {
+            currentScale = newScale;
+            applyImageScale(currentScale);
+          }
+        } else if (e.key === '-') {
+          e.preventDefault();
+          const newScale = Math.max(MIN_SCALE, currentScale - SCALE_STEP);
+          if (newScale !== currentScale) {
+            currentScale = newScale;
+            applyImageScale(currentScale);
+          }
+        } else if (e.key === '0') {
+          e.preventDefault();
+          resetImageScale();
+        }
+      };
+
+      document.addEventListener('keydown', handleKeyDown);
+
     } else if (e.target === imageModal) {
       // 点击模态框背景关闭
       imageModal.style.display = 'none';
+      currentModalImg = null;
+      scaleIndicator = null;
     }
   });
+
+  // 添加鼠标滚轮缩放功能
+  imageModal.addEventListener('wheel', (e) => {
+    if (!currentModalImg) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // 计算新的缩放比例
+    const delta = e.deltaY > 0 ? -SCALE_STEP : SCALE_STEP;
+    const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, currentScale + delta));
+
+    if (newScale !== currentScale) {
+      currentScale = newScale;
+      applyImageScale(currentScale);
+    }
+  });
+
+  // 阻止模态框内的滚轮事件冒泡到页面
+  imageModal.addEventListener('wheel', (e) => {
+    e.stopPropagation();
+  }, { passive: false });
+
+  // 添加全局调试函数
+  window.chatDebug = {
+    testContent: debugContentProcessing,
+    testImageUrl: isImageUrl,
+    postProcess: postProcessContent,
+    renderMarkdown: (content) => marked.parse(content),
+    // 测试各种内容类型
+    testAll: () => {
+      const testCases = [
+        '这是普通文字',
+        'https://example.com/image.jpg',
+        '![已有图片](https://example.com/existing.png)',
+        '[普通链接](https://example.com)',
+        '混合内容：这里有文字 https://i.imgur.com/test.jpg 还有更多文字',
+        '代码中的链接：`https://example.com/image.png`',
+        '```\nhttps://example.com/code-image.jpg\n```',
+        // 添加你提供的具体测试案例
+        'https://staticdelivery.nexusmods.com/mods/2531/images/thumbnails/8181/8181-1743260154-1810356489.png'
+      ];
+
+      testCases.forEach((test, index) => {
+        console.log(`\n=== 测试案例 ${index + 1}: ${test} ===`);
+        debugContentProcessing(test);
+      });
+    },
+    // 专门测试你的URL
+    testNexusUrl: () => {
+      const url = 'https://staticdelivery.nexusmods.com/mods/2531/images/thumbnails/8181/8181-1743260154-1810356489.png';
+      console.log('测试Nexus图片URL:', url);
+      console.log('是否被识别为图片:', isImageUrl(url));
+      debugContentProcessing(url);
+    },
+    // 测试实际AI返回的内容
+    testActualAIContent: () => {
+      const content = `[模组名称: Afterlight Reshade](https://staticdelivery.nexusmods.com/mods/6944/images/thumbnails/1358/1358-1745230185-303885123.png)
+专为《S.T.A.L.K.E.R. 2》设计的电影级画质增强预设，通过21种着色器模拟**廉价镜头美学**，包含动态模糊、HUD叠加、色差等效果。
+
+### 核心功能亮点
+🔹 **沉浸式镜头缺陷**
+- [镜头柔光](https://staticdelivery.nexusmods.com/mods/6944/images/thumbnails/1358/1358-1745230186-1581374871.png)：GaussianBlur制造运动模糊与雾面质感
+- [VHS故障特效](https://staticdelivery.nexusmods.com/mods/6944/images/thumbnails/1358/1358-1745230191-138771826.png)：VHS_RA着色器生成信号干扰与跟踪错误
+- [广角畸变](https://staticdelivery.nexusmods.com/mods/6944/images/thumbnails/1358/1358-1745230192-1558651387.png)：PerfectPerspective实现鱼眼镜头变形
+
+🔹 **专业级色彩科学**
+- 冷调LUT包：Bonus LUT Pack打造法医蓝调色板
+- 选择性降饱和：Selective Color剥离暖色调模拟执法记录仪
+- [动态光效](https://staticdelivery.nexusmods.com/mods/6944/images/thumbnails/1358/1358-1745230197-700500790.png)：AmbientLight实现光线折射与色渗`;
+
+      console.log('测试实际AI返回内容:');
+      debugContentProcessing(content);
+    },
+
+    // 测试图片缩放功能
+    testImageZoom: () => {
+      console.log('图片缩放功能说明:');
+      console.log('1. 点击聊天中的图片可以放大查看');
+      console.log('2. 在放大的图片上使用鼠标滚轮可以缩放');
+      console.log('3. 双击图片可以重置缩放比例');
+      console.log('4. 键盘快捷键:');
+      console.log('   - ESC: 关闭图片');
+      console.log('   - +/=: 放大');
+      console.log('   - -: 缩小');
+      console.log('   - 0: 重置缩放');
+      console.log('5. 缩放范围: 10% - 500%');
+      console.log('6. 右下角显示当前缩放比例');
+    }
+  };
+
+  console.log('AI聊天调试工具已加载，使用 window.chatDebug 访问调试功能');
 });
 
 // 修改创建模组数据预览区域的函数
@@ -1462,7 +1885,7 @@ function formatModData(modData) {
 }
 
 // 修改监听来自 background script 的消息的处理
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request) => {
     if (request.action === 'initAIChat') {
         console.log('收到初始化AI聊天窗口的消息:', request.modData);
         const modData = request.modData;
