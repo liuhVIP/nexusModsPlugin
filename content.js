@@ -7,32 +7,196 @@ const STORAGE_KEYS = {
   REQUEST_DELAY: 'requestDelay'
 };
 
+// 加载时间跟踪对象
+const loadingTimeTracker = new Map(); // key: modId, value: { startTime, gameName }
+
+// 添加CSS动画到页面
+function addShimmerAnimation() {
+  if (document.getElementById('nexus-shimmer-style')) return;
+
+  const style = document.createElement('style');
+  style.id = 'nexus-shimmer-style';
+  style.textContent = `
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// 页面加载时添加动画
+addShimmerAnimation();
+
+// 时间跟踪辅助函数
+function startLoadingTimer(modId, gameName) {
+  loadingTimeTracker.set(modId, {
+    startTime: Date.now(),
+    gameName: gameName
+  });
+  console.log(`开始计时模组 ${modId}`);
+}
+
+function getLoadingTime(modId) {
+  const tracker = loadingTimeTracker.get(modId);
+  if (!tracker) {
+    return null;
+  }
+  const endTime = Date.now();
+  const loadingTime = endTime - tracker.startTime;
+  loadingTimeTracker.delete(modId); // 清理已完成的计时
+  console.log(`模组 ${modId} 加载完成，耗时: ${loadingTime}ms`);
+  return loadingTime;
+}
+
+// 获取当前加载时间但不删除计时器（用于预览）
+function peekLoadingTime(modId) {
+  const tracker = loadingTimeTracker.get(modId);
+  if (!tracker) {
+    return null;
+  }
+  const endTime = Date.now();
+  const loadingTime = endTime - tracker.startTime;
+  return loadingTime;
+}
+
+// 清理超时的加载时间跟踪器（防止内存泄漏）
+function cleanupStaleTimers() {
+  const now = Date.now();
+  const maxAge = 5 * 60 * 1000; // 5分钟超时
+
+  loadingTimeTracker.forEach((tracker, modId) => {
+    if (now - tracker.startTime > maxAge) {
+      console.warn(`清理超时的计时器: 模组 ${modId}, 已运行 ${now - tracker.startTime}ms`);
+      loadingTimeTracker.delete(modId);
+    }
+  });
+}
+
+// 调试函数：显示当前所有活跃的计时器
+function debugActiveTimers() {
+  console.log('当前活跃的加载时间跟踪器:');
+  loadingTimeTracker.forEach((tracker, modId) => {
+    const elapsed = Date.now() - tracker.startTime;
+    console.log(`- 模组 ${modId}: ${elapsed}ms (游戏: ${tracker.gameName})`);
+  });
+}
+
+function formatLoadingTime(milliseconds) {
+  if (milliseconds < 1000) {
+    return `${milliseconds}ms`;
+  } else if (milliseconds < 60000) {
+    return `${(milliseconds / 1000).toFixed(1)}s`;
+  } else {
+    const minutes = Math.floor(milliseconds / 60000);
+    const seconds = Math.floor((milliseconds % 60000) / 1000);
+    return `${minutes}m ${seconds}s`;
+  }
+}
+
+// 更新现有加载状态的函数
+function updateExistingLoadingStates() {
+  console.log('更新现有加载状态，当前解析状态:', isParsingEnabled ? '启用' : '暂停');
+
+  document.querySelectorAll(`.${CONTAINER_CLASS}`).forEach(container => {
+    const textContent = container.textContent;
+    const isLoadingOrPausedState = textContent.includes('获取直链') ||
+                                  textContent.includes('正在获取') ||
+                                  textContent.includes('N网助手') ||
+                                  textContent.includes('暂停');
+
+    if (isLoadingOrPausedState) {
+      // 完全重新创建容器内容并应用对应样式
+      container.innerHTML = '';
+      container.style.cssText = isParsingEnabled ? STYLES.CONTAINER_LOADING : STYLES.CONTAINER_PAUSED;
+
+      // 添加图标
+      if (isParsingEnabled) {
+        const spinner = createLoadingSpinner();
+        container.appendChild(spinner);
+      } else {
+        const pauseIcon = document.createElement('span');
+        pauseIcon.textContent = '⏸️';
+        pauseIcon.style.cssText = 'font-size: 14px;';
+        container.appendChild(pauseIcon);
+      }
+
+      // 添加文本
+      const loadingText = document.createElement('span');
+      loadingText.textContent = isParsingEnabled ? '正在获取直链...' : '获取直链已暂停';
+      container.appendChild(loadingText);
+    }
+  });
+}
+
 // 添加表格相关样式
 const STYLES = {
   CONTAINER: `
-    margin: 10px 0;
-    padding: 8px;
-    background-color: #f8f9fa;
-    border-radius: 4px;
-    font-size: 14px;
+    margin: 6px 0;
+    padding: 10px;
+    background: #ffffff;
+    border-radius: 6px;
+    font-size: 13px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+    position: relative;
   `,
-  LOADING: `
-    color: #666;
-    font-size: 14px;
-    padding: 8px;
+  CONTAINER_LOADING: `
+    margin: 6px 0;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    position: relative;
+    color: #6b7280;
+    background: linear-gradient(90deg, #f8fafc 0%, #e2e8f0 50%, #f8fafc 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
     display: flex;
     align-items: center;
     gap: 8px;
   `,
+  CONTAINER_PAUSED: `
+    margin: 6px 0;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    position: relative;
+    color: #f59e0b;
+    background: #fffbeb;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  `,
+  CONTAINER_ERROR: `
+    margin: 6px 0;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    transition: all 0.2s ease;
+    position: relative;
+    color: #dc2626;
+    background: #fef2f2;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  `,
   SUCCESS: `
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
   `,
-  ERROR: `
-    color: #d32f2f;
-    font-size: 14px;
-    padding: 8px;
+  // 加载时间显示样式 - 更简洁
+  LOADING_TIME: `
+    background: #e0f2fe;
+    color: #0369a1;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
   `,
   // 添加表格相关样式
   TABLE_CONTAINER: `
@@ -214,14 +378,16 @@ function getDirectLinksFromCache(gameName, modId) {
 }
 
 // 保存直链到缓存
-function saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl) {
+function saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl, loadingTime = null) {
   const cacheKey = getCacheKey(gameName, modId);
   parsedLinksCache.set(cacheKey, {
     downloadUrls,
     fullUrl,
+    loadingTime, // 新增：缓存加载时间
     timestamp: Date.now() // 添加时间戳
   });
   saveParsedLinksCache();
+  console.log(`缓存已保存: ${cacheKey}${loadingTime ? `, 加载时间: ${loadingTime}ms` : ''}`);
 }
 
 // 重置并同步进度计数器 - 修复分页问题版本（移除totalMods处理）
@@ -589,36 +755,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       });
     }
 
-    // 更新所有加载状态的显示，使用更精确的选择器
-    document.querySelectorAll(`.${CONTAINER_CLASS}`).forEach(container => {
-      // 查找加载中的内容 - 通过查找具有LOADING样式特征的元素
-      const loadingContent = container.querySelector('div[style*="display: flex"][style*="align-items: center"][style*="gap: 8px"]');
-      if (loadingContent) {
-        // 确认是加载状态而不是已完成状态
-        const isLoadingState = loadingContent.textContent.includes('获取直链') ||
-                              loadingContent.textContent.includes('N网助手');
-
-        if (isLoadingState) {
-          // 移除现有的加载动画
-          const existingSpinner = loadingContent.querySelector('div');
-          if (existingSpinner) {
-            existingSpinner.remove();
-          }
-
-          // 更新文本
-          const loadingText = loadingContent.querySelector('span');
-          if (loadingText) {
-            loadingText.textContent = isParsingEnabled ? 'N网助手正在获取直链....' : '获取直链已暂停';
-
-            // 如果恢复解析，添加加载动画
-            if (isParsingEnabled) {
-              const spinner = createLoadingSpinner();
-              loadingContent.insertBefore(spinner, loadingText);
-            }
-          }
-        }
-      }
-    });
+    // 使用专门的函数更新所有加载状态
+    updateExistingLoadingStates();
 
     // 更新进度条状态 - 这是关键的修复
     const modInfo = parseNexusUrl(window.location.href);
@@ -760,9 +898,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       if (targetMod) {
         console.log(`成功找到模组 ${modId} 的元素，开始更新直链`);
-        // 保存到缓存
-        saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl);
-        displayDirectLinksInModTile(targetMod.element, downloadUrls, fullUrl);
+        // 获取加载时间
+        const loadingTime = getLoadingTime(modId);
+        // 保存到缓存（包含加载时间）
+        saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl, loadingTime);
+        // 显示直链时传递加载时间
+        displayDirectLinksInModTile(targetMod.element, downloadUrls, fullUrl, loadingTime);
 
         // 更新进度计数器 - 使用新的统一方法，添加防重复检查
         if (!globalCounters.completedModIds.has(gameName)) {
@@ -789,8 +930,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return false;
       } else {
         console.error(`多次重试后仍未找到模组 ${modId} 的元素`);
-        // 即使找不到元素，也要保存到缓存和更新计数器
-        saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl);
+        // 即使找不到元素，也要保存到缓存和更新计数器（包含加载时间）
+        const loadingTime = getLoadingTime(modId);
+        saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl, loadingTime);
         if (!globalCounters.completedModIds.has(gameName)) {
           globalCounters.completedModIds.set(gameName, new Set());
         }
@@ -888,9 +1030,9 @@ async function handleModUrlDetected(modInfo) {
       isGameListPage: false // 标准模组页面
     }, (response) => {
       if (response.success && response.downloadUrls) {
-        // 保存到缓存
+        // 保存到缓存（标准页面没有加载时间跟踪）
         const fullUrl = `https://www.nexusmods.com/${modInfo.gameName}/mods/${modInfo.modId}?tab=files`;
-        saveDirectLinksToCache(modInfo.gameName, modInfo.modId, response.downloadUrls, fullUrl);
+        saveDirectLinksToCache(modInfo.gameName, modInfo.modId, response.downloadUrls, fullUrl, null);
         displayAllDirectLinks(response.downloadUrls);
       } else {
         // 获取直链失败，清除授权缓存
@@ -1046,30 +1188,43 @@ function handleGameListPage(gameName) {
         console.log(`发现 ${cachedCount} 个缓存模组`);
 
         // 为所有模组添加直链显示 - 改进版本，添加延迟确保DOM稳定
-        const displayModLinks = () => {
-            console.log(`开始为 ${modsData.length} 个模组显示直链状态`);
+        const displayModLinks = (skipCompleted = false) => {
+            console.log(`开始为 ${modsData.length} 个模组显示直链状态${skipCompleted ? '（跳过已完成）' : ''}`);
             modsData.forEach((modData, index) => {
                 // 添加小延迟，确保DOM元素稳定
                 setTimeout(() => {
+                    // 如果需要跳过已完成的模组，检查是否已经有成功状态的容器
+                    if (skipCompleted) {
+                        const existingContainer = modData.element.querySelector(`.${CONTAINER_CLASS}`);
+                        if (existingContainer) {
+                            // 检查是否是成功状态（包含下载链接的容器）
+                            const downloadLink = existingContainer.querySelector('a[href*="http"]');
+                            if (downloadLink) {
+                                console.log(`跳过已完成的模组 ${modData.modId}`);
+                                return; // 跳过已经显示成功状态的模组
+                            }
+                        }
+                    }
+
                     // 检查缓存中是否已有该模组的直链
                     const cacheKey = getCacheKey(gameName, modData.modId);
                     if (parsedLinksCache.has(cacheKey)) {
                         // 如果缓存中有，直接显示缓存的直链
                         const cachedData = parsedLinksCache.get(cacheKey);
-                        console.log(`显示模组 ${modData.modId} 的缓存直链`);
-                        displayDirectLinksInModTile(modData.element, cachedData.downloadUrls, cachedData.fullUrl);
+                        console.log(`显示模组 ${modData.modId} 的缓存直链${cachedData.loadingTime ? `，加载时间: ${cachedData.loadingTime}ms` : ''}`);
+                        displayDirectLinksInModTile(modData.element, cachedData.downloadUrls, cachedData.fullUrl, cachedData.loadingTime);
                     } else {
                         // 如果缓存中没有，显示加载状态
                         console.log(`显示模组 ${modData.modId} 的加载状态`);
-                        displayLoadingInModTile(modData.element);
+                        displayLoadingInModTile(modData.element, modData.modId, gameName);
                     }
                 }, index * 10); // 每个模组延迟10ms，避免同时操作大量DOM
             });
         };
 
-        // 立即显示，然后在DOM稳定后再次确保显示
+        // 立即显示，然后在DOM稳定后再次确保显示（但跳过已完成的）
         displayModLinks();
-        setTimeout(displayModLinks, 500); // 500ms后再次确保显示
+        setTimeout(() => displayModLinks(true), 500); // 500ms后再次确保显示，但跳过已完成的模组
 
         // 获取或创建进度弹窗 - 确保在更新进度前创建
         const progressContainer = getOrCreateProgressContainer();
@@ -1188,34 +1343,63 @@ function handleGameListPage(gameName) {
 /**
  * 在模组卡片中显示加载状态
  * @param {Element} modTile 模组卡片元素
+ * @param {string} modId 模组ID（可选，用于时间跟踪）
+ * @param {string} gameName 游戏名称（可选，用于时间跟踪）
  */
-function displayLoadingInModTile(modTile) {
+function displayLoadingInModTile(modTile, modId = null, gameName = null) {
   if (!modTile) return;
 
-  // 检查是否已经存在直链容器
-  if (modTile.querySelector(`.${CONTAINER_CLASS}`)) return;
+  // 检查是否已经存在直链容器，如果存在则更新而不是重复创建
+  let container = modTile.querySelector(`.${CONTAINER_CLASS}`);
+  let isExisting = !!container;
 
-  const container = document.createElement('div');
-  container.className = CONTAINER_CLASS;
-  container.style.cssText = STYLES.CONTAINER;
+  // 尝试从模组卡片中提取模组ID（如果没有提供）
+  if (!modId) {
+    const modLink = modTile.querySelector('a[href*="/mods/"]');
+    if (modLink) {
+      const href = modLink.getAttribute('href');
+      const modIdMatch = href.match(/\/mods\/(\d+)/);
+      if (modIdMatch && modIdMatch[1]) {
+        modId = modIdMatch[1];
+      }
+    }
+  }
 
-  const loadingContent = document.createElement('div');
-  loadingContent.style.cssText = STYLES.LOADING;
+  // 开始计时（如果有模组ID和游戏名称，且不是已存在的容器）
+  if (modId && gameName && !isExisting) {
+    startLoadingTimer(modId, gameName);
+  }
+
+  // 如果容器不存在，创建新的
+  if (!container) {
+    container = document.createElement('div');
+    container.className = CONTAINER_CLASS;
+  }
+
+  // 清空容器内容并应用对应的样式
+  container.innerHTML = '';
+  container.style.cssText = isParsingEnabled ? STYLES.CONTAINER_LOADING : STYLES.CONTAINER_PAUSED;
 
   // 只在非暂停状态下添加加载动画
   if (isParsingEnabled) {
     const spinner = createLoadingSpinner();
-    loadingContent.appendChild(spinner);
+    container.appendChild(spinner);
+  } else {
+    // 暂停状态显示暂停图标
+    const pauseIcon = document.createElement('span');
+    pauseIcon.textContent = '⏸️';
+    pauseIcon.style.cssText = 'font-size: 14px;';
+    container.appendChild(pauseIcon);
   }
 
   const loadingText = document.createElement('span');
-  loadingText.textContent = isParsingEnabled ? 'N网助手正在获取直链....' : '获取直链已暂停';
-  loadingContent.appendChild(loadingText);
+  loadingText.textContent = isParsingEnabled ? '正在获取直链...' : '获取直链已暂停';
+  container.appendChild(loadingText);
 
-  container.appendChild(loadingContent);
-
-  // 插入到模组卡片中
-  modTile.appendChild(container);
+  // 只有在容器不存在时才插入到模组卡片中
+  if (!isExisting) {
+    modTile.appendChild(container);
+  }
 }
 
 /**
@@ -1223,9 +1407,38 @@ function displayLoadingInModTile(modTile) {
  * @param {Element} modTile 模组卡片元素
  * @param {Array} downloadUrls 下载链接数组
  * @param {string} fullUrl 完整的模组URL
+ * @param {number} cachedLoadingTime 缓存的加载时间（可选）
  */
-function displayDirectLinksInModTile(modTile, downloadUrls, fullUrl) {
+function displayDirectLinksInModTile(modTile, downloadUrls, fullUrl, cachedLoadingTime = null) {
   if (!modTile || !downloadUrls || downloadUrls.length === 0) return;
+
+  // 尝试从模组卡片中提取模组ID和游戏名称
+  let modId = null;
+  let gameName = null;
+  const modLink = modTile.querySelector('a[href*="/mods/"]');
+  if (modLink) {
+    const href = modLink.getAttribute('href');
+    const modIdMatch = href.match(/\/mods\/(\d+)/);
+    if (modIdMatch && modIdMatch[1]) {
+      modId = modIdMatch[1];
+    }
+    // 从URL中提取游戏名称
+    const gameNameMatch = href.match(/\/([^\/]+)\/mods\//);
+    if (gameNameMatch && gameNameMatch[1]) {
+      gameName = gameNameMatch[1];
+    }
+  }
+
+  // 获取加载时间：优先使用传入的缓存时间，其次从缓存获取
+  let loadingTime = cachedLoadingTime;
+  if (!loadingTime && modId && gameName) {
+    // 从缓存中获取加载时间
+    const cachedData = getDirectLinksFromCache(gameName, modId);
+    if (cachedData && cachedData.loadingTime) {
+      loadingTime = cachedData.loadingTime;
+      console.log(`从缓存获取模组 ${modId} 的加载时间: ${loadingTime}ms`);
+    }
+  }
 
   // 移除现有的容器
   const existingContainer = modTile.querySelector(`.${CONTAINER_CLASS}`);
@@ -1238,102 +1451,134 @@ function displayDirectLinksInModTile(modTile, downloadUrls, fullUrl) {
   container.className = CONTAINER_CLASS;
   container.style.cssText = STYLES.CONTAINER;
 
-  // 创建顶部信息行（查看模组页面 + 文件数量提示）
-  const topInfoRow = document.createElement('div');
-  topInfoRow.style.cssText = `
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  `;
+  // 创建一行式布局
+  const successRow = document.createElement('div');
+  successRow.style.cssText = STYLES.SUCCESS;
 
-  // 添加模组页面链接
-  const modPageLink = document.createElement('a');
-  modPageLink.href = fullUrl;
-  modPageLink.target = '_blank';
-  modPageLink.style.cssText = `
-    color: #1a73e8;
+  // 左侧：下载链接
+  const linkElement = document.createElement('a');
+  linkElement.href = downloadUrls[0].url;
+  linkElement.target = '_blank';
+  linkElement.style.cssText = `
+    flex: 1;
+    color: #3b82f6;
     text-decoration: none;
-    font-weight: bold;
+    font-weight: 500;
+    font-size: 13px;
+    transition: color 0.2s ease;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `;
-  modPageLink.textContent = '查看模组页面';
-  topInfoRow.appendChild(modPageLink);
+  linkElement.textContent = '点击下载';
 
-  // 添加文件数量提示 - 无论是否暂停解析，只要有多个文件都显示
+  // 添加悬停效果
+  linkElement.addEventListener('mouseenter', () => {
+    linkElement.style.color = '#2563eb';
+  });
+  linkElement.addEventListener('mouseleave', () => {
+    linkElement.style.color = '#3b82f6';
+  });
+
+  successRow.appendChild(linkElement);
+
+  // 右侧信息组
+  const rightInfo = document.createElement('div');
+  rightInfo.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  `;
+
+  // 文件数量（如果多个文件）
   if (downloadUrls.length > 1) {
-    const fileCountInfo = document.createElement('div');
-    fileCountInfo.style.cssText = `
-      font-size: 12px;
-      color: #666;
+    const fileCount = document.createElement('span');
+    fileCount.style.cssText = `
+      font-size: 11px;
+      color: #64748b;
+      background: #f1f5f9;
       padding: 2px 6px;
-      background-color: #f5f5f5;
-      border-radius: 4px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 2px;
     `;
-
-    const fileCountText = document.createElement('span');
-    fileCountText.textContent = `模组有 ${downloadUrls.length} 个文件`;
-    fileCountInfo.appendChild(fileCountText);
-
-    topInfoRow.appendChild(fileCountInfo);
+    fileCount.innerHTML = `📁 ${downloadUrls.length}个文件`;
+    rightInfo.appendChild(fileCount);
   }
 
-  container.appendChild(topInfoRow);
-
-  // 显示第一个直链和复制按钮
-  if (downloadUrls.length > 0) {
-    const directLinkRow = document.createElement('div');
-    directLinkRow.style.cssText = `
+  // 加载时间
+  if (loadingTime !== null) {
+    console.log(`显示模组 ${modId} 的加载时间: ${loadingTime}ms`);
+    const loadingTimeElement = document.createElement('span');
+    loadingTimeElement.style.cssText = STYLES.LOADING_TIME + `
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 2px;
     `;
-
-    const linkElement = document.createElement('a');
-    linkElement.href = downloadUrls[0].url;
-    linkElement.target = '_blank';
-    linkElement.style.cssText = `
-      flex: 1;
-      word-break: break-all;
-      color: #1a73e8;
-      text-decoration: none;
-    `;
-    linkElement.textContent = '点击下载直链'; // 修改文本为"点击下载直链"
-    directLinkRow.appendChild(linkElement);
-
-    // 添加复制按钮
-    const copyButton = document.createElement('button');
-    copyButton.textContent = '复制链接';
-    copyButton.style.cssText = `
-      padding: 4px 8px;
-      background-color: #1a73e8;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 12px;
-      white-space: nowrap;
-    `;
-    copyButton.onclick = () => {
-      navigator.clipboard.writeText(downloadUrls[0].url).then(() => {
-        // 保存原始图标
-        const originalIcon = copyButton.cloneNode(true);
-        // 创建成功图标
-        const successIcon = createIcon('static/success.png', '已复制!');
-        // 替换图标
-        copyButton.replaceChild(successIcon, copyButton.childNodes[0]);
-        // 2秒后恢复原始图标
-        setTimeout(() => {
-          copyButton.replaceChild(originalIcon, successIcon);
-        }, 2000);
-      });
-    };
-    directLinkRow.appendChild(copyButton);
-
-    container.appendChild(directLinkRow);
+    loadingTimeElement.innerHTML = `⚡ ${formatLoadingTime(loadingTime)}`;
+    rightInfo.appendChild(loadingTimeElement);
+  } else {
+    console.log(`模组 ${modId} 没有加载时间数据`);
   }
+
+  // 复制按钮
+  const copyButton = document.createElement('button');
+  copyButton.textContent = '复制';
+  copyButton.style.cssText = `
+    padding: 4px 8px;
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: background 0.2s ease;
+  `;
+  // 添加复制按钮悬停效果
+  copyButton.addEventListener('mouseenter', () => {
+    copyButton.style.background = '#059669';
+  });
+  copyButton.addEventListener('mouseleave', () => {
+    copyButton.style.background = '#10b981';
+  });
+
+  copyButton.onclick = () => {
+    navigator.clipboard.writeText(downloadUrls[0].url).then(() => {
+      // 保存原始文本和样式
+      const originalText = copyButton.textContent;
+      const originalBg = copyButton.style.background;
+
+      // 显示成功状态
+      copyButton.textContent = '已复制';
+      copyButton.style.background = '#059669';
+
+      // 1.5秒后恢复原始状态
+      setTimeout(() => {
+        copyButton.textContent = originalText;
+        copyButton.style.background = originalBg;
+      }, 1500);
+    }).catch(() => {
+      // 复制失败时的处理
+      const originalText = copyButton.textContent;
+      const originalBg = copyButton.style.background;
+
+      copyButton.textContent = '失败';
+      copyButton.style.background = '#dc2626';
+
+      setTimeout(() => {
+        copyButton.textContent = originalText;
+        copyButton.style.background = originalBg;
+      }, 1500);
+    });
+  };
+
+  rightInfo.appendChild(copyButton);
+  successRow.appendChild(rightInfo);
+  container.appendChild(successRow);
 
   // 插入到模组卡片中
   modTile.appendChild(container);
@@ -1355,12 +1600,18 @@ function displayErrorInModTile(modTile, message) {
 
   const container = document.createElement('div');
   container.className = CONTAINER_CLASS;
-  container.style.cssText = STYLES.CONTAINER;
+  container.style.cssText = STYLES.CONTAINER_ERROR;
 
-  const errorMessage = document.createElement('div');
-  errorMessage.textContent = message;
-  errorMessage.style.cssText = STYLES.ERROR;
-  container.appendChild(errorMessage);
+  // 添加错误图标
+  const errorIcon = document.createElement('span');
+  errorIcon.textContent = '⚠️';
+  errorIcon.style.cssText = 'font-size: 14px;';
+
+  const errorText = document.createElement('span');
+  errorText.textContent = message;
+
+  container.appendChild(errorIcon);
+  container.appendChild(errorText);
 
   // 插入到模组卡片中
   modTile.appendChild(container);
@@ -1676,6 +1927,8 @@ window.addEventListener('load', () => {
   restoreParsedLinksCache();
   // 每小时检查一次过期缓存
   setInterval(cleanupExpiredCache, 60 * 60 * 1000);
+  // 每5分钟清理一次超时的计时器
+  setInterval(cleanupStaleTimers, 5 * 60 * 1000);
 
   // 从全局缓存同步解析状态
   chrome.runtime.sendMessage({
@@ -1825,9 +2078,9 @@ function handleControlPanelTable() {
                 isGameListPage: false // 标准模组页面
             }, (response) => {
                 if (response.success && response.downloadUrls) {
-                    // 保存到缓存
+                    // 保存到缓存（标准页面没有加载时间跟踪）
                     const fullUrl = `https://www.nexusmods.com/${modInfo.gameName}/mods/${modInfo.modId}?tab=files`;
-                    saveDirectLinksToCache(modInfo.gameName, modInfo.modId, response.downloadUrls, fullUrl);
+                    saveDirectLinksToCache(modInfo.gameName, modInfo.modId, response.downloadUrls, fullUrl, null);
                     displayAllDirectLinks(response.downloadUrls);
                 } else {
                     // 获取直链失败，清除授权缓存
