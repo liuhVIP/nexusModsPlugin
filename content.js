@@ -2505,20 +2505,31 @@ function createExpandButton(container, gameName) {
   return button;
 }
 
-// 添加AI分析模组相关的常量
+// 添加AI分析模组相关的常量 - 专业深色系
 const AI_ANALYZER = {
     BUTTON_ID: 'ai-analyze-button',
     BUTTON_TEXT: 'AI分析模组',
     BUTTON_STYLE: `
-        padding: 8px 16px;
-        margin-left: 10px;
-        background-color: #4CAF50;
-        color: white;
-        border: none;
-        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: linear-gradient(135deg, #141725 0%, #323772 100%);
+        color: #ffffff;
+        border: 1px solid rgba(50, 55, 114, 0.3);
+        border-radius: 12px;
         cursor: pointer;
         font-size: 14px;
-        transition: background-color 0.3s;
+        font-weight: 600;
+        text-decoration: none;
+        margin-left: 10px;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(20, 23, 37, 0.6), 0 2px 8px rgba(50, 55, 114, 0.2);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        transform: translateY(0);
+        min-width: 140px;
     `
 };
 

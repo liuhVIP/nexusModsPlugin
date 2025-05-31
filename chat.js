@@ -79,9 +79,9 @@ const utils = {
   // 格式化时间
   formatTime: () => {
     const now = new Date();
-    return now.toLocaleTimeString('zh-CN', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    return now.toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit'
     });
   },
 
@@ -104,7 +104,7 @@ const utils = {
     textarea.style.height = 'auto';
     textarea.style.height = textarea.scrollHeight + 'px';
   },
-  
+
   // 获取需要发送的消息历史
   getMessageHistory: () => {
     // 复制消息历史，只保留角色和内容
@@ -112,7 +112,7 @@ const utils = {
       role: msg.role,
       content: msg.content
     }));
-    
+
     // 限制消息数量，避免超出token限制
     if (historyMessages.length > CONSTANTS.MAX_HISTORY_MESSAGES) {
       // 保留第一条系统消息（如果有）
@@ -121,10 +121,10 @@ const utils = {
       const recentMessages = historyMessages.slice(-CONSTANTS.MAX_HISTORY_MESSAGES);
       historyMessages = [...firstMessage, ...recentMessages];
     }
-    
+
     return historyMessages;
   },
-  
+
   // 保存聊天历史到本地存储
   saveChatHistory: () => {
     try {
@@ -133,7 +133,7 @@ const utils = {
       console.error('保存聊天历史失败:', error);
     }
   },
-  
+
   // 从本地存储加载聊天历史
   loadChatHistory: () => {
     try {
@@ -179,7 +179,7 @@ const utils = {
   // 保存当前聊天记录
   saveCurrentChat: function() {
     if (!state.currentChatId) return;
-    
+
     try {
       const chatData = {
         id: state.currentChatId,
@@ -187,7 +187,7 @@ const utils = {
         messages: state.messages,
         lastUpdate: Date.now()
       };
-      
+
       // 更新或添加聊天记录
       const index = state.chatHistory.findIndex(chat => chat.id === state.currentChatId);
       if (index !== -1) {
@@ -195,7 +195,7 @@ const utils = {
       } else {
         state.chatHistory.unshift(chatData);
       }
-      
+
       // 保存到本地存储
       this.saveChatHistoryList();
     } catch (error) {
@@ -227,12 +227,12 @@ const utils = {
   // 计算文本的token数量
   calculateTokens: (text) => {
     if (!text) return 0;
-    
+
     // 计算中文字符数量
     const chineseChars = (text.match(/[\u4e00-\u9fa5]/g) || []).length;
     // 计算其他字符数量
     const otherChars = text.length - chineseChars;
-    
+
     // 中文字符按1.3倍计算，其他字符按1倍计算
     return Math.ceil(chineseChars * CONSTANTS.TOKEN_RATIO + otherChars);
   },
@@ -240,7 +240,7 @@ const utils = {
   // 更新token计数显示
   updateTokenCount: (text) => {
     let totalText = text || '';
-    
+
     // 如果存在模组数据预览窗口，将其内容也计入token统计
     if (elements.modDataPreview) {
       const editableContent = elements.modDataPreview.querySelector('[contenteditable="true"]');
@@ -248,13 +248,13 @@ const utils = {
         totalText += '\n' + editableContent.textContent;
       }
     }
-    
+
     const tokenCount = utils.calculateTokens(totalText);
     const tokenCountElement = document.getElementById('tokenCount');
-    
+
     if (tokenCountElement) {
       tokenCountElement.textContent = `Token数量: ${tokenCount}`;
-      
+
       // 如果超过警告阈值，添加警告样式
       if (tokenCount > CONSTANTS.MAX_TOKEN_WARNING) {
         tokenCountElement.style.color = '#ff4d4f';
@@ -306,23 +306,23 @@ const messageHandler = {
     // 创建新的消息元素
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${isUser ? 'user' : ''}`;
-    
+
     // 如果提供了messageId，设置元素id
     if (messageId) {
       messageDiv.id = `message-${messageId}`;
     }
-    
+
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
     avatar.innerHTML = `<img src="images/${isUser ? 'user' : 'ai'}-avatar.png" alt="${isUser ? '用户' : 'AI'}头像">`;
-    
+
     // 创建一个新的容器来包含消息内容和模组数据区域
     const messageBody = document.createElement('div');
     messageBody.className = 'message-body';
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
-    
+
     if (!isUser) {
       const actions = document.createElement('div');
       actions.className = 'message-actions';
@@ -332,7 +332,7 @@ const messageHandler = {
         </button>
       `;
       contentDiv.appendChild(actions);
-      
+
       // 复制按钮事件：始终复制正式内容
       actions.querySelector('.copy-btn').addEventListener('click', () => {
         // 处理内容，去除多余的换行符
@@ -344,10 +344,10 @@ const messageHandler = {
         showCopyToast();
       });
     }
-    
+
     const markdownContent = document.createElement('div');
     markdownContent.className = 'markdown-content';
-    
+
     if (!isUser) {
       // AI消息添加markdown复制按钮
       const markdownCopyBtn = document.createElement('button');
@@ -360,30 +360,51 @@ const messageHandler = {
       });
       markdownContent.appendChild(markdownCopyBtn);
     }
-    
+
     markdownContent.innerHTML = marked.parse(content);
+
+    // 为图片添加点击放大功能
+    if (!isUser) {
+      markdownContent.querySelectorAll('.message-image').forEach(img => {
+        img.style.cursor = 'pointer';
+        img.onclick = function(e) {
+          e.preventDefault();
+          // 使用现有的图片模态框显示逻辑
+          const imageModal = document.querySelector('.image-modal');
+          if (imageModal) {
+            imageModal.style.display = 'block';
+            const modalImg = document.createElement('img');
+            modalImg.src = this.src;
+            modalImg.alt = this.alt;
+            imageModal.innerHTML = '';
+            imageModal.appendChild(modalImg);
+          }
+        };
+      });
+    }
+
     contentDiv.appendChild(markdownContent);
-    
+
     // 声明 modDataSection 变量
     let modDataSection = null;
-    
+
     // 如果是用户消息且包含模组数据，添加模组数据预览区域的触发元素
     if (isUser && modData) {
         modDataSection = document.createElement('div');
         // 初始状态仍然使用 collapsed 类，但不再控制 max-height 和 overflow
         modDataSection.className = 'user-mod-data-section collapsed';
-        
+
         const toggle = document.createElement('div');
         toggle.className = 'user-mod-data-toggle';
         toggle.innerHTML = `<svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" stroke="#333" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`; // 使用深色图标
         modDataSection.appendChild(toggle);
-        
+
         const header = document.createElement('div');
         header.className = 'user-mod-data-header';
         const titleText = modData.name.slice(0, 20) + (modData.name.length > 20 ? '...' : ''); // 限制名称长度
         header.innerHTML = `<span class="user-mod-data-title">${titleText}</span>`; // 标题只显示名称
         modDataSection.appendChild(header);
-        
+
         // 创建悬浮内容区域，不直接添加到 modDataSection
         const modDataContentOverlay = document.createElement('div');
         modDataContentOverlay.className = 'user-mod-data-expanded-overlay';
@@ -447,25 +468,25 @@ const messageHandler = {
                 const overlay = modDataContentOverlay;
                 const viewportWidth = window.innerWidth;
                 const viewportHeight = window.innerHeight;
-                
+
                 // 计算最佳位置
                 let left = rect.left;
                 let top = rect.bottom + window.scrollY + 5; // 距离底部5px
-                
+
                 // 检查右边界
                 const rightEdge = left + overlay.offsetWidth;
                 if (rightEdge > viewportWidth) {
                     // 如果超出右边界，向左偏移
                     left = Math.max(10, viewportWidth - overlay.offsetWidth - 10);
                 }
-                
+
                 // 检查下边界
                 const bottomEdge = top + overlay.offsetHeight;
                 if (bottomEdge > viewportHeight + window.scrollY) {
                     // 如果超出下边界，尝试显示在触发元素上方
                     top = Math.max(10, rect.top + window.scrollY - overlay.offsetHeight - 5);
                 }
-                
+
                 // 应用位置
                 overlay.style.left = `${left}px`;
                 overlay.style.top = `${top}px`;
@@ -475,7 +496,7 @@ const messageHandler = {
                 setTimeout(() => {
                      document.addEventListener('click', closeOverlayOnClickOutside);
                 }, 0);
-               
+
             }
         };
 
@@ -493,7 +514,7 @@ const messageHandler = {
     timeDiv.className = 'message-time';
     timeDiv.textContent = utils.formatTime();
     contentDiv.appendChild(timeDiv);
-    
+
     // 将内容区域添加到 messageBody
     messageBody.appendChild(contentDiv);
 
@@ -505,10 +526,10 @@ const messageHandler = {
     // 将 avatar 和 messageBody 添加到 messageDiv
     messageDiv.appendChild(avatar);
     messageDiv.appendChild(messageBody);
-    
+
     elements.chatMessages.appendChild(messageDiv);
     utils.scrollToBottom();
-    
+
     return messageDiv;
   },
 
@@ -533,18 +554,18 @@ const messageHandler = {
     utils.scrollToBottom();
     return typingDiv;
   },
-  
+
   // 更新消息内容
   updateMessageContent: (messageElement, content) => {
     if (!messageElement) return;
-    
+
     const markdownContent = messageElement.querySelector('.markdown-content');
     if (markdownContent) {
       markdownContent.innerHTML = marked.parse(content);
       utils.scrollToBottom();
     }
   },
-  
+
   // 添加或更新AI消息（包含思考内容和正式内容）
   updateAIMessage: (messageId, content, reasoningContent = null, isDone = false) => {
     let messageDiv = document.getElementById(`message-${messageId}`);
@@ -554,14 +575,14 @@ const messageHandler = {
       messageDiv.className = 'message';
       messageDiv.id = `message-${messageId}`;
       isNew = true;
-      
+
       const avatar = document.createElement('div');
       avatar.className = 'message-avatar';
       avatar.innerHTML = `<img src="images/ai-avatar.png" alt="AI头像">`;
-      
+
       const contentDiv = document.createElement('div');
       contentDiv.className = 'message-content';
-      
+
       const actions = document.createElement('div');
       actions.className = 'message-actions';
       actions.innerHTML = `
@@ -570,49 +591,49 @@ const messageHandler = {
         </button>
       `;
       contentDiv.appendChild(actions);
-      
+
       if (reasoningContent) {
         const reasoningDiv = document.createElement('div');
         reasoningDiv.className = 'reasoning-section';
         reasoningDiv.id = `reasoning-section-${messageId}`;
-        
+
         const toggle = document.createElement('div');
         toggle.className = 'reasoning-toggle';
         toggle.innerHTML = `<svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" stroke="#bfa100" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
         reasoningDiv.appendChild(toggle);
-        
+
         const header = document.createElement('div');
         header.className = 'reasoning-header';
         header.innerHTML = '思考过程 <span class="reasoning-timer" id="reasoning-timer-'+messageId+'"></span>';
         reasoningDiv.appendChild(header);
-        
+
         const reasoningContentDiv = document.createElement('div');
         reasoningContentDiv.className = 'reasoning-content';
         reasoningContentDiv.id = `reasoning-${messageId}`;
         reasoningDiv.appendChild(reasoningContentDiv);
         contentDiv.appendChild(reasoningDiv);
-        
+
         toggle.addEventListener('click', () => {
           reasoningDiv.classList.toggle('collapsed');
         });
       }
-      
+
       const markdownContent = document.createElement('div');
       markdownContent.className = 'markdown-content';
       markdownContent.id = `content-${messageId}`;
       contentDiv.appendChild(markdownContent);
-      
+
       const timeDiv = document.createElement('div');
       timeDiv.className = 'message-time';
       timeDiv.textContent = utils.formatTime();
       contentDiv.appendChild(timeDiv);
-      
+
       messageDiv.appendChild(avatar);
       messageDiv.appendChild(contentDiv);
-      
+
       elements.chatMessages.appendChild(messageDiv);
     }
-    
+
     // 更新复制按钮的事件监听器
     const copyBtn = messageDiv.querySelector('.copy-btn');
     if (copyBtn) {
@@ -630,7 +651,7 @@ const messageHandler = {
         showCopyToast();
       });
     }
-    
+
     const contentElement = document.getElementById(`content-${messageId}`);
     if (contentElement) {
       try {
@@ -639,27 +660,45 @@ const messageHandler = {
           .trim() // 去除首尾空白
           .replace(/\n{3,}/g, '\n\n') // 将3个以上的换行符替换为2个
           .replace(/^\n+|\n+$/g, ''); // 去除首尾的换行符
-        
+
         // 使用 marked 解析内容
         const parsedContent = marked.parse(processedContent);
-        
+
         // 保存原始内容到 data 属性
         contentElement.setAttribute('data-original-content', processedContent);
-        
+
         // 更新内容，保留复制按钮
         const copyBtn = contentElement.querySelector('.markdown-copy-btn');
         contentElement.innerHTML = parsedContent;
         if (copyBtn) {
           contentElement.appendChild(copyBtn);
         }
-        
+
+        // 为图片添加点击放大功能
+        contentElement.querySelectorAll('.message-image').forEach(img => {
+          img.style.cursor = 'pointer';
+          img.onclick = function(e) {
+            e.preventDefault();
+            // 使用现有的图片模态框显示逻辑
+            const imageModal = document.querySelector('.image-modal');
+            if (imageModal) {
+              imageModal.style.display = 'block';
+              const modalImg = document.createElement('img');
+              modalImg.src = this.src;
+              modalImg.alt = this.alt;
+              imageModal.innerHTML = '';
+              imageModal.appendChild(modalImg);
+            }
+          };
+        });
+
         // 处理代码块
         contentElement.querySelectorAll('pre code').forEach((block) => {
           // 添加语言类
           if (!block.className) {
             block.className = 'language-plaintext';
           }
-          
+
           // 为每个代码块添加复制按钮
           const pre = block.parentElement;
           if (!pre.querySelector('.code-copy-btn')) {
@@ -667,7 +706,7 @@ const messageHandler = {
             copyBtn.className = 'code-copy-btn';
             copyBtn.innerHTML = '<img src="images/copy.png" alt="复制">';
             copyBtn.title = '复制代码';
-            
+
             copyBtn.addEventListener('click', async () => {
               try {
                 await navigator.clipboard.writeText(block.textContent);
@@ -676,7 +715,7 @@ const messageHandler = {
                 console.error('复制代码失败:', err);
               }
             });
-            
+
             pre.style.position = 'relative';
             pre.appendChild(copyBtn);
           }
@@ -686,7 +725,7 @@ const messageHandler = {
         contentElement.textContent = content;
       }
     }
-    
+
     if (reasoningContent) {
       const reasoningElement = document.getElementById(`reasoning-${messageId}`);
       if (reasoningElement) {
@@ -696,14 +735,14 @@ const messageHandler = {
             .trim()
             .replace(/\n{3,}/g, '\n\n')
             .replace(/^\n+|\n+$/g, '');
-          
+
           reasoningElement.innerHTML = marked.parse(processedReasoning);
         } catch (error) {
           console.error('思考内容 Markdown 解析错误:', error);
           reasoningElement.textContent = reasoningContent;
         }
       }
-      
+
       const timerSpan = document.getElementById('reasoning-timer-'+messageId);
       if (timerSpan) {
         if (state.reasoningStartTime && state.reasoningEndTime) {
@@ -715,13 +754,13 @@ const messageHandler = {
           timerSpan.textContent = `（用时 ${seconds} 秒）`;
         }
       }
-      
+
       const reasoningDiv = document.getElementById(`reasoning-section-${messageId}`);
       if (reasoningDiv && isDone) {
         reasoningDiv.classList.add('collapsed');
       }
     }
-    
+
     utils.scrollToBottom();
     return messageDiv;
   }
@@ -731,7 +770,7 @@ const messageHandler = {
 function showCopyToast() {
   // 检查是否已存在提示元素
   let toast = document.getElementById('copyToast');
-  
+
   if (!toast) {
     // 创建提示元素
     toast = document.createElement('div');
@@ -740,10 +779,10 @@ function showCopyToast() {
     toast.textContent = '复制成功';
     document.body.appendChild(toast);
   }
-  
+
   // 显示提示
   toast.classList.add('show');
-  
+
   // 2秒后隐藏
   setTimeout(() => {
     toast.classList.remove('show');
@@ -756,7 +795,7 @@ const apiHandler = {
   sendMessage: async (messages) => {
     const uniqueId = utils.generateUniqueId();
     const messageId = utils.generateUniqueId();
-    
+
     const payload = {
       userId: -1,
       uniqueId,
@@ -818,24 +857,24 @@ const apiHandler = {
             const data = line.slice(5).trim();
             if (data === '[DONE]') {
               state.isGenerating = false;
-              
+
               // 记录思考结束时间
               if (state.reasoningStartTime) {
                 state.reasoningEndTime = Date.now();
               }
-              
+
               // 确保最终内容已更新
               if (state.currentAiResponse || state.currentReasoning) {
                 messageHandler.updateAIMessage(messageId, state.currentAiResponse, state.currentReasoning, true);
               }
-              
+
               // 将消息添加到状态
               if (state.currentAiResponse) {
                 state.messages.push({ role: 'assistant', content: state.currentAiResponse });
                 // 保存聊天历史到本地存储
                 utils.saveChatHistory();
               }
-              
+
               return;
             }
 
@@ -843,7 +882,7 @@ const apiHandler = {
               const parsed = JSON.parse(data);
               if (parsed.choices && parsed.choices[0].delta) {
                 const delta = parsed.choices[0].delta;
-                
+
                 // 处理思考内容
                 const reasoningChunk = delta.reasoning_content || '';
                 if (reasoningChunk) {
@@ -853,7 +892,7 @@ const apiHandler = {
                     reasoningStarted = true;
                   }
                 }
-                
+
                 // 处理正常内容
                 const contentChunk = delta.content || '';
                 if (contentChunk) {
@@ -864,7 +903,7 @@ const apiHandler = {
                     typingMessage = null;
                   }
                 }
-                
+
                 // 更新消息显示
                 messageHandler.updateAIMessage(messageId, state.currentAiResponse, state.currentReasoning, false);
               }
@@ -891,14 +930,14 @@ const historyHandler = {
   renderHistoryList() {
     const historyContainer = elements.chatHistory;
     historyContainer.innerHTML = '';
-    
+
     state.chatHistory.forEach(chat => {
       const historyItem = document.createElement('div');
       historyItem.className = 'history-item';
       if (chat.id === state.currentChatId) {
         historyItem.classList.add('active');
       }
-      
+
       historyItem.innerHTML = `
         <img src="images/chat.png" alt="聊天" class="history-item-icon">
         <div class="history-item-content">
@@ -909,12 +948,12 @@ const historyHandler = {
           <img src="images/delete.png" alt="删除">
         </button>
       `;
-      
+
       // 添加点击事件加载聊天
       historyItem.querySelector('.history-item-content').addEventListener('click', () => {
         this.loadChat(chat.id);
       });
-      
+
       // 添加删除按钮点击事件
       const deleteBtn = historyItem.querySelector('.history-delete-btn');
       deleteBtn.addEventListener('click', (e) => {
@@ -932,7 +971,7 @@ const historyHandler = {
           this.renderHistoryList();
         }
       });
-      
+
       historyContainer.appendChild(historyItem);
     });
   },
@@ -941,17 +980,17 @@ const historyHandler = {
   loadChat(chatId) {
     const chat = state.chatHistory.find(c => c.id === chatId);
     if (!chat) return;
-    
+
     // 更新状态
     state.currentChatId = chatId;
     state.messages = [...chat.messages];
-    
+
     // 清空并重新渲染消息
     elements.chatMessages.innerHTML = '';
     state.messages.forEach(msg => {
       messageHandler.addMessage(msg.content, msg.role === 'user');
     });
-    
+
     // 更新历史记录列表显示
     this.renderHistoryList();
   },
@@ -962,12 +1001,12 @@ const historyHandler = {
     if (state.currentChatId) {
       utils.saveCurrentChat();
     }
-    
+
     // 创建新聊天
     state.currentChatId = utils.generateChatId();
     state.messages = [];
     elements.chatMessages.innerHTML = '';
-    
+
     // 更新历史记录列表
     this.renderHistoryList();
   }
@@ -984,7 +1023,7 @@ function initializeElements() {
     sidebarToggle: document.getElementById('sidebarToggle'),
     modDataPreview: document.getElementById('modDataPreview')
   };
-  
+
   // 初始化事件监听
   initializeEventListeners();
 }
@@ -1015,7 +1054,7 @@ function initializeEventListeners() {
       state.stopRequested = true;
       state.currentStream?.cancel();
       state.isGenerating = false;
-      
+
       // 保存已接收的内容
       if (state.currentAiResponse) {
         state.messages.push({ role: 'assistant', content: state.currentAiResponse });
@@ -1026,7 +1065,7 @@ function initializeEventListeners() {
         // 更新历史记录列表
         historyHandler.renderHistoryList();
       }
-      
+
       // 恢复发送按钮
       elements.sendButton.innerHTML = '<img src="images/send.png" alt="发送">';
       elements.sendButton.disabled = true;
@@ -1041,7 +1080,7 @@ function initializeEventListeners() {
   elements.sidebarToggle.addEventListener('click', () => {
     const sidebar = document.querySelector('.chat-sidebar');
     const isCollapsed = sidebar.classList.contains('collapsed');
-    
+
     if (isCollapsed) {
       // 展开侧边栏
       sidebar.classList.remove('collapsed');
@@ -1086,12 +1125,12 @@ function enableHistoryItems() {
 // 在DOM加载完成后初始化
 document.addEventListener('DOMContentLoaded', () => {
   initializeElements();
-  
+
   // 加载聊天历史列表
   if (utils.loadChatHistoryList()) {
     historyHandler.renderHistoryList();
   }
-  
+
   // 如果没有历史记录，创建新聊天
   if (state.chatHistory.length === 0) {
     historyHandler.createNewChat();
@@ -1162,7 +1201,7 @@ function createModDataPreview(modData) {
         align-items: center;
         gap: 8px;
     `;
-    
+
     // 添加展开/折叠图标
     const expandIcon = document.createElement('span');
     expandIcon.innerHTML = '▼';
@@ -1170,7 +1209,7 @@ function createModDataPreview(modData) {
         font-size: 12px;
         transition: transform 0.3s;
     `;
-    
+
     title.appendChild(expandIcon);
     title.appendChild(document.createTextNode(`模组数据: ${modData.name}`));
 
@@ -1241,7 +1280,7 @@ function createModDataPreview(modData) {
         try {
             const lines = editableContent.textContent.split('\n');
             const newModData = { ...modData };
-            
+
             // 解析内容并更新模组数据
             let currentSection = '';
             lines.forEach(line => {
@@ -1281,10 +1320,10 @@ function createModDataPreview(modData) {
                     }
                 }
             });
-            
+
             // 更新状态中的模组数据
             state.modData = newModData;
-            
+
             // 更新token计数
             utils.updateTokenCount(elements.chatInput.value);
         } catch (error) {
@@ -1317,7 +1356,7 @@ function createModDataPreview(modData) {
     // 保存预览区域的引用
     elements.modDataPreview = previewContainer;
     state.modData = modData;
-    
+
     // 更新token计数
     utils.updateTokenCount(elements.chatInput.value);
 }
@@ -1336,24 +1375,24 @@ async function handleSendMessage() {
 
     // 生成用户消息的唯一ID
     const userMessageId = utils.generateUniqueId();
-    
+
     // 构建用户消息对象，包含模组数据（如果存在）
-    const userMessage = { 
-        role: 'user', 
-        content: message, 
+    const userMessage = {
+        role: 'user',
+        content: message,
         id: userMessageId
     };
-    
+
     if (state.modData) {
         userMessage.modData = state.modData;
     }
 
     // 添加用户消息到界面和历史
     messageHandler.addMessage(userMessage.content, true, userMessage.id, userMessage.modData);
-    
+
     // 添加到消息历史
     state.messages.push(userMessage);
-    
+
     // 保存聊天历史
     utils.saveCurrentChat();
     historyHandler.renderHistoryList();
@@ -1362,7 +1401,7 @@ async function handleSendMessage() {
     elements.chatInput.value = '';
     elements.sendButton.disabled = true;
     utils.adjustTextareaHeight(elements.chatInput);
-    
+
     if (elements.modDataPreview) {
         elements.modDataPreview.remove();
         elements.modDataPreview = null;
@@ -1383,7 +1422,7 @@ async function handleSendMessage() {
     try {
         // 获取聊天历史记录作为上下文
         const messageHistory = utils.getMessageHistory();
-        
+
         // 如果用户消息中包含模组数据，将其添加到历史记录开头作为系统消息
         if (userMessage.modData) {
             const modDataContext = formatModData(userMessage.modData);
@@ -1399,7 +1438,7 @@ async function handleSendMessage() {
 
         // 发送到API，带上历史记录
         await apiHandler.sendMessage(messageHistory);
-        
+
         // 保存聊天历史
         utils.saveCurrentChat();
         historyHandler.renderHistoryList();
@@ -1427,10 +1466,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'initAIChat') {
         console.log('收到初始化AI聊天窗口的消息:', request.modData);
         const modData = request.modData;
-        
+
         // 创建模组数据预览区域
         if (modData) {
             createModDataPreview(modData);
         }
     }
-}); 
+});

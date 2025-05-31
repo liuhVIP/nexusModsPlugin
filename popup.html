@@ -4,197 +4,329 @@
   <title>Nexus Mods 直链</title>
   <meta charset="UTF-8">
   <style>
+    /* 现代化基础样式 */
+    :root {
+      --primary-color: #667eea;
+      --primary-light: #f093fb;
+      --secondary-color: #764ba2;
+      --success-color: #10b981;
+      --warning-color: #f59e0b;
+      --error-color: #ef4444;
+      --text-primary: #1f2937;
+      --text-secondary: #6b7280;
+      --text-muted: #9ca3af;
+      --bg-primary: #ffffff;
+      --bg-secondary: #f9fafb;
+      --bg-tertiary: #f3f4f6;
+      --border-color: #e5e7eb;
+      --border-light: #f3f4f6;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
     body {
-      width: 500px;
-      padding: 20px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      background-color: #f5f5f5;
+      width: 520px;
+      padding: 0;
       margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+      color: var(--text-primary);
+      line-height: 1.6;
     }
+
+    /* 主容器样式 */
+    .main-container {
+      padding: 16px;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+
     .container {
-      background: white;
-      border-radius: 12px;
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
       padding: 20px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      margin-bottom: 20px;
+      box-shadow: var(--shadow-md);
+      margin-bottom: 16px;
+      border: 1px solid var(--border-light);
+      transition: all 0.3s ease;
     }
+
+    .container:hover {
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-1px);
+    }
+
+    /* 头部样式 */
     .header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 15px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-light);
     }
+
     .title {
-      font-size: 28px;
-      font-weight: 600;
-      color: #1a73e8;
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
       margin: 0;
       line-height: 1.2;
     }
+
     .online-count {
-      padding: 6px 16px;
-      background: #e8f0fe;
-      border-radius: 8px;
-      font-size: 15px;
+      padding: 8px 12px;
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+      color: white;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      font-weight: 500;
       display: flex;
       align-items: center;
-      height: 38px;
-    }
-    .author, .version {
-      font-size: 14px;
-      color: #666;
-      margin: 5px 0;
-    }
-    .update-link {
-      display: inline-block;
-      margin-top: 10px;
-      color: #1a73e8;
-      text-decoration: none;
-      font-size: 14px;
-      padding: 8px 16px;
-      border-radius: 6px;
-      background-color: #e8f0fe;
-      transition: all 0.3s ease;
-    }
-    .update-link:hover {
-      background-color: #1a73e8;
-      color: white;
-    }
-    #status {
-      padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 15px;
-      font-weight: 500;
-    }
-    .status-loading {
-      background-color: #e3f2fd;
-      color: #1976d2;
-    }
-    .status-success {
-      background-color: #e8f5e9;
-      color: #2e7d32;
-    }
-    .status-error {
-      background-color: #ffebee;
-      color: #d32f2f;
+      gap: 6px;
+      box-shadow: var(--shadow-sm);
     }
 
+    .author, .version {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 4px 0;
+    }
+
+    .update-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 12px;
+      color: var(--primary-color);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(240, 147, 251, 0.1) 100%);
+      border: 1px solid rgba(102, 126, 234, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .update-link:hover {
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+      color: white;
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+    /* 状态样式 */
+    #status {
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      margin-bottom: 16px;
+      font-weight: 500;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .status-loading {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(240, 147, 251, 0.1) 100%);
+      color: var(--primary-color);
+      border: 1px solid rgba(102, 126, 234, 0.2);
+    }
+
+    .status-success {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+      color: var(--success-color);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .status-error {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+      color: var(--error-color);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    /* 链接单元格样式 */
     .link-cell {
       max-width: 200px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
-    }
-    .link-cell:hover {
       position: relative;
     }
+
     .link-cell:hover::after {
       content: attr(data-full-url);
       position: absolute;
       left: 0;
       top: 100%;
-      background: #333;
+      background: var(--text-primary);
       color: white;
-      padding: 8px;
-      border-radius: 4px;
+      padding: 8px 12px;
+      border-radius: var(--radius-md);
       z-index: 1000;
       white-space: normal;
       max-width: 300px;
       word-break: break-all;
+      box-shadow: var(--shadow-lg);
+      font-size: 12px;
     }
+
+    /* 现代化按钮样式 */
     .action-button {
-      width: 32px;
-      height: 32px;
+      width: 36px;
+      height: 36px;
       padding: 0;
-      margin: 0 4px 0 0;
+      margin: 0 6px 0 0;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       border: none;
-      border-radius: 4px;
+      border-radius: var(--radius-md);
       cursor: pointer;
-      font-size: 13px;
+      font-size: 14px;
       transition: all 0.3s ease;
       box-sizing: border-box;
+      position: relative;
+      overflow: hidden;
     }
+
+    .action-button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0) 100%);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .action-button:hover::before {
+      opacity: 1;
+    }
+
     .action-button img {
       width: 18px;
       height: 18px;
       display: block;
+      transition: all 0.3s ease;
     }
+
     .copy-button {
-      background-color: #e3f2fd;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(240, 147, 251, 0.1) 100%);
+      border: 1px solid rgba(102, 126, 234, 0.2);
     }
+
     .copy-button:hover {
-      background-color: #1976d2;
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
     }
+
     .copy-button:hover img {
       filter: brightness(0) invert(1);
     }
+
     .download-button {
-      background-color: #e8f5e9;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.2);
     }
+
     .download-button:hover {
-      background-color: #2e7d32;
+      background: linear-gradient(135deg, var(--success-color) 0%, #059669 100%);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
     }
+
     .download-button:hover img {
       filter: brightness(0) invert(1);
     }
+
     .copy-all-button {
-      background-color: #fff3e0;
-      color: #f57c00;
-      padding: 0 12px;
-      border-radius: 4px;
+      background: linear-gradient(135deg, rgba(245, 158, 11, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
+      color: var(--warning-color);
+      padding: 0 16px;
+      border-radius: var(--radius-md);
       font-size: 13px;
       font-weight: 500;
-      height: 32px;
-      line-height: 32px;
+      height: 36px;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       margin: 0;
-      border: none;
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      cursor: pointer;
+      transition: all 0.3s ease;
       vertical-align: middle;
     }
+
     .copy-all-button:hover {
-      background-color: #f57c00;
+      background: linear-gradient(135deg, var(--warning-color) 0%, #d97706 100%);
       color: white;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
     }
+
     .copy-all-button:hover img {
       filter: brightness(0) invert(1);
     }
+
     .copy-all-button img {
       width: 16px;
       height: 16px;
+      transition: all 0.3s ease;
     }
+    /* 授权状态样式 */
     .auth-status {
-      padding: 12px;
-      border-radius: 8px;
-      margin-bottom: 15px;
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      margin-bottom: 16px;
       font-weight: 500;
+      font-size: 14px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
+      transition: all 0.3s ease;
     }
+
     .auth-status.success {
-      background-color: #e8f5e9;
-      color: #2e7d32;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(16, 185, 129, 0.05) 100%);
+      color: var(--success-color);
+      border: 1px solid rgba(16, 185, 129, 0.2);
     }
+
     .auth-status.error {
-      background-color: #ffebee;
-      color: #d32f2f;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+      color: var(--error-color);
+      border: 1px solid rgba(239, 68, 68, 0.2);
     }
+
     .auth-status-icon {
       width: 20px;
       height: 20px;
+      transition: all 0.3s ease;
     }
 
-    /* 加载动画样式 */
+    /* 现代化加载动画 */
     .loading-spinner {
       width: 20px;
       height: 20px;
-      border: 2px solid #f3f3f3;
-      border-top: 2px solid #3498db;
+      border: 2px solid rgba(102, 126, 234, 0.2);
+      border-top: 2px solid var(--primary-color);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -204,41 +336,62 @@
       100% { transform: rotate(360deg); }
     }
 
-    /* 推荐工具样式 */
+    /* 脉冲动画 */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .loading-pulse {
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    /* 现代化推荐工具样式 */
     .tools-list {
       display: flex;
       flex-direction: column;
-      gap: 12px;
-      margin-top: 10px;
+      gap: 8px;
+      margin-top: 12px;
     }
 
     .tool-item {
       display: flex;
       align-items: center;
-      padding: 12px;
-      background: #f8f9fa;
-      border-radius: 8px;
+      padding: 12px 16px;
+      background: var(--bg-primary);
+      border-radius: var(--radius-md);
       text-decoration: none;
       color: inherit;
       transition: all 0.3s ease;
+      border: 1px solid var(--border-light);
+      cursor: pointer;
     }
 
     .tool-item:hover {
-      background: #e8f0fe;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(240, 147, 251, 0.05) 100%);
       transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+      border-color: rgba(102, 126, 234, 0.2);
     }
 
     .tool-icon {
-      font-size: 24px;
+      font-size: 20px;
       margin-right: 12px;
-      width: 40px;
-      height: 40px;
+      width: 36px;
+      height: 36px;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+      color: white;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      transition: all 0.3s ease;
+    }
+
+    .tool-item:hover .tool-icon {
+      transform: scale(1.1);
+      box-shadow: var(--shadow-md);
     }
 
     .tool-info {
@@ -247,89 +400,117 @@
 
     .tool-name {
       font-weight: 600;
-      color: #1a73e8;
-      margin-bottom: 4px;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+      font-size: 14px;
     }
 
     .tool-desc {
-      font-size: 13px;
-      color: #666;
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
     }
 
-    /* 折叠面板样式 */
-    .tools-container {
-      margin-top: 20px;
+    /* 现代化折叠面板样式 */
+    .tools-container, .settings-container {
+      margin-bottom: 16px;
     }
 
-    .tools-container details {
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    .tools-container details, .settings-container details {
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border-light);
+      transition: all 0.3s ease;
     }
 
-    .tools-container summary {
-      padding: 12px 20px;
+    .tools-container details:hover, .settings-container details:hover {
+      box-shadow: var(--shadow-lg);
+    }
+
+    .tools-container summary, .settings-container summary {
+      padding: 16px 20px;
       cursor: pointer;
       user-select: none;
-      font-weight: 500;
-      color: #1a73e8;
+      font-weight: 600;
+      color: var(--text-primary);
+      transition: all 0.3s ease;
+      border-radius: var(--radius-lg);
     }
 
-    .tools-container summary:hover {
-      background: #f8f9fa;
+    .tools-container summary:hover, .settings-container summary:hover {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(240, 147, 251, 0.05) 100%);
     }
 
-    .tools-container summary::-webkit-details-marker {
+    .tools-container summary::-webkit-details-marker, .settings-container summary::-webkit-details-marker {
       display: none;
     }
 
-    .tools-container summary::before {
+    .tools-container summary::before, .settings-container summary::before {
       content: '▶';
-      margin-right: 8px;
+      margin-right: 10px;
       font-size: 12px;
-      transition: transform 0.2s;
+      transition: transform 0.3s ease;
+      color: var(--primary-color);
     }
 
-    .tools-container details[open] summary::before {
+    .tools-container details[open] summary::before, .settings-container details[open] summary::before {
       transform: rotate(90deg);
     }
 
-    /* 开关样式 */
+    .tools-container details[open] summary, .settings-container details[open] summary {
+      border-bottom: 1px solid var(--border-light);
+      border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+
+    /* 现代化设置样式 */
     .settings-container {
-      background: white;
-      border-radius: 8px;
-      padding: 15px;
-      margin-bottom: 15px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      background: var(--bg-primary);
+      border-radius: var(--radius-lg);
+      padding: 0;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--border-light);
+      overflow: hidden;
     }
 
     .settings-title {
       font-weight: 600;
-      color: #1a73e8;
-      margin-bottom: 12px;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      padding: 16px 20px 0;
+      font-size: 16px;
     }
 
     .settings-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 8px 0;
-      border-bottom: 1px solid #f0f0f0;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border-light);
+      transition: all 0.3s ease;
     }
 
     .settings-item:last-child {
       border-bottom: none;
     }
 
-    .settings-label {
-      font-size: 14px;
+    .settings-item:hover {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(240, 147, 251, 0.02) 100%);
     }
 
+    .settings-label {
+      font-size: 14px;
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    /* 现代化开关样式 */
     .switch {
       position: relative;
       display: inline-block;
-      width: 44px;
-      height: 24px;
+      width: 48px;
+      height: 26px;
     }
 
     .switch input {
@@ -345,70 +526,101 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: #ccc;
-      transition: .3s;
-      border-radius: 24px;
+      background: linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%);
+      transition: all 0.3s ease;
+      border-radius: 26px;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .slider:before {
       position: absolute;
       content: "";
-      height: 18px;
-      width: 18px;
+      height: 20px;
+      width: 20px;
       left: 3px;
       bottom: 3px;
-      background-color: white;
-      transition: .3s;
+      background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+      transition: all 0.3s ease;
       border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
 
     input:checked + .slider {
-      background-color: #1a73e8;
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1), 0 0 0 2px rgba(102, 126, 234, 0.2);
     }
 
     input:checked + .slider:before {
-      transform: translateX(20px);
+      transform: translateX(22px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
 
+    .slider:hover {
+      transform: scale(1.05);
+    }
+
+    /* 输入框样式 */
+    input[type="number"] {
+      padding: 6px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      text-align: center;
+      transition: all 0.3s ease;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+    }
+
+    input[type="number"]:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    /* 表格头部样式 */
     .table-header-container {
       display: flex;
       justify-content: space-between;
       align-items: center;
       width: 100%;
+      margin-bottom: 12px;
     }
 
     .table-title {
       font-weight: 600;
-      color: #333;
+      color: var(--text-primary);
+      font-size: 16px;
     }
 
     #copyAllBtnContainer {
       margin: 0;
     }
 
-    /* 下载链接加载效果 */
+    /* 现代化下载加载效果 */
     .download-loading {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 4px 8px;
-      background: #f8f9fa;
-      border-radius: 4px;
+      padding: 6px 12px;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(240, 147, 251, 0.1) 100%);
+      border: 1px solid rgba(102, 126, 234, 0.2);
+      border-radius: var(--radius-md);
       font-size: 12px;
-      color: #666;
+      color: var(--primary-color);
+      font-weight: 500;
     }
 
     .download-loading .loading-dots {
       display: inline-flex;
-      gap: 2px;
+      gap: 3px;
     }
 
     .download-loading .dot {
       width: 4px;
       height: 4px;
-      background: #666;
+      background: var(--primary-color);
       border-radius: 50%;
-      animation: dot-flashing 1s infinite linear alternate;
+      animation: dot-flashing 1.4s infinite ease-in-out;
     }
 
     .download-loading .dot:nth-child(2) {
@@ -420,56 +632,67 @@
     }
 
     @keyframes dot-flashing {
-      0% {
-        opacity: 0.2;
+      0%, 80%, 100% {
+        opacity: 0.3;
         transform: scale(0.8);
       }
-      100% {
+      40% {
         opacity: 1;
-        transform: scale(1);
+        transform: scale(1.2);
       }
     }
 
     .download-status {
       font-size: 12px;
       margin-left: 8px;
+      font-weight: 500;
     }
 
     .download-status.success {
-      color: #2e7d32;
+      color: var(--success-color);
     }
 
     .download-status.error {
-      color: #d32f2f;
+      color: var(--error-color);
     }
 
-    /* 赞助板块样式 */
+    /* 现代化赞助板块样式 */
     .sponsor-container {
-      padding: 15px;
+      padding: 20px;
+    }
+
+    .sponsor-container p {
+      text-align: center;
+      margin-bottom: 16px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.5;
     }
 
     .sponsor-images {
       display: flex;
       justify-content: space-around;
-      gap: 10px;
+      gap: 12px;
     }
 
     .sponsor-img {
-      width: 120px;
-      height: 120px;
+      width: 110px;
+      height: 110px;
       object-fit: cover;
-      border-radius: 8px;
+      border-radius: var(--radius-lg);
       cursor: pointer;
       transition: all 0.3s ease;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      box-shadow: var(--shadow-md);
+      border: 2px solid var(--border-light);
     }
 
     .sponsor-img:hover {
-      transform: scale(1.05);
-      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      transform: scale(1.08) translateY(-4px);
+      box-shadow: var(--shadow-lg);
+      border-color: rgba(102, 126, 234, 0.3);
     }
 
-    /* 图片放大效果 */
+    /* 现代化图片放大效果 */
     .fullscreen-image {
       display: none;
       position: fixed;
@@ -477,48 +700,145 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0,0,0,0.9);
+      background: rgba(0, 0, 0, 0.95);
+      backdrop-filter: blur(10px);
       z-index: 9999;
       justify-content: center;
       align-items: center;
       cursor: pointer;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     .fullscreen-image img {
       max-width: 90%;
       max-height: 90%;
       object-fit: contain;
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      animation: zoomIn 0.3s ease;
+    }
+
+    @keyframes zoomIn {
+      from {
+        transform: scale(0.8);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    /* 键盘快捷键样式 */
+    kbd {
+      background: linear-gradient(135deg, var(--bg-tertiary) 0%, var(--bg-secondary) 100%);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      padding: 4px 8px;
+      font-size: 12px;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+      color: var(--text-primary);
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* 清除缓存按钮样式 */
+    #clearCacheBtn {
+      padding: 10px 24px;
+      background: linear-gradient(135deg, var(--error-color) 0%, #dc2626 100%);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 500;
+      margin: 8px auto;
+      display: block;
+      transition: all 0.3s ease;
+      box-shadow: var(--shadow-sm);
+    }
+
+    #clearCacheBtn:hover {
+      background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    #clearCacheBtn:active {
+      transform: translateY(0);
+    }
+
+    /* 滚动条样式 */
+    .main-container::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .main-container::-webkit-scrollbar-track {
+      background: var(--bg-tertiary);
+      border-radius: 3px;
+    }
+
+    .main-container::-webkit-scrollbar-thumb {
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+      border-radius: 3px;
+    }
+
+    .main-container::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-color) 100%);
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1 class="title">N网Mod省事助手(免费)</h1>
-      <div class="online-count">
-        <span>在线人数：</span>
-        <span id="onlineCount">加载中...</span>
+  <div class="main-container">
+    <!-- 主信息卡片 -->
+    <div class="container">
+      <div class="header">
+        <h1 class="title">N网Mod省事助手</h1>
+        <div class="online-count">
+          <span>在线：</span>
+          <span id="onlineCount">...</span>
+        </div>
       </div>
+      <p class="author">🎯 求一键三连，谢谢支持</p>
+      <p class="author">👨‍💻 作者：b站up改洺_</p>
+      <p class="version">📦 版本：v1.0.0</p>
+      <a href="https://space.bilibili.com/18718286?spm_id_from=333.1007.0.0" class="update-link" target="_blank">
+        🔄 获取更新
+      </a>
     </div>
-    <p class="author">求一键三连，谢谢</p>
-    <p class="author">作者：b站up改洺_</p>
-    <p class="version">版本：v1.0.0</p>
-    <a href="https://space.bilibili.com/18718286?spm_id_from=333.1007.0.0" class="update-link" target="_blank">获取更新</a>
-  </div>
-    <!-- 添加URL监听控制开关 -->
+        <!-- 授权状态显示 -->
+        <div id="authStatus" class="auth-status">
+          <div class="loading-spinner"></div>
+          <span>正在检查授权状态...</span>
+        </div>
+    
+        <!-- 当前状态显示 -->
+        <div id="status" class="status-loading">请访问模组详情页...</div>
+        <div id="directLink"></div>
+    <!-- 统一设置管理面板 -->
     <div class="settings-container">
       <details>
-        <summary>URL监听设置</summary>
-        <div style="padding: 10px 0;">
+        <summary>⚙️ 功能设置</summary>
+        <div style="padding: 16px 0;">
           <div class="settings-item">
-            <div class="settings-label">监听标准模组页面</div>
+            <div class="settings-label">
+              <span>📄 监听标准模组页面</span>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">自动获取模组详情页的下载链接</div>
+            </div>
             <label class="switch">
               <input type="checkbox" id="standardUrlSwitch" checked>
               <span class="slider"></span>
             </label>
           </div>
           <div class="settings-item">
-            <div class="settings-label">监听游戏列表页面</div>
+            <div class="settings-label">
+              <span>📋 监听游戏列表页面</span>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">批量获取游戏列表页的模组链接</div>
+            </div>
             <label class="switch">
               <input type="checkbox" id="gameListUrlSwitch">
               <span class="slider"></span>
@@ -528,126 +848,106 @@
       </details>
     </div>
 
-    <!-- 添加高级设置 -->
     <div class="settings-container">
-      <div class="settings-title">高级设置</div>
       <details>
-        <summary>快捷键设置</summary>
-        <div style="padding: 10px 0;">
+        <summary>🔧 高级设置</summary>
+        <div style="padding: 16px 0;">
           <div class="settings-item">
-            <div class="settings-label">开始/暂停解析</div>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <kbd style="
-                  background: #f8f9fa;
-                  border: 1px solid #dee2e6;
-                  border-radius: 4px;
-                  padding: 4px 8px;
-                  font-size: 12px;
-                  font-family: monospace;
-                ">Ctrl + X</kbd>
-                <span style="font-size: 12px; color: #666;">Mac: Command + X</span>
-              </div>
-              <div style="font-size: 12px; color: #666;">
-                修改方法：<br>
-                1. 打开 Chrome 扩展管理页面 (chrome://extensions/shortcuts)<br>
-                2. 找到"Nexus Mods 直链工具"<br>
-              </div>
+            <div class="settings-label">
+              <span>⏱️ 模组请求间隔(毫秒)</span>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">模组之间的请求间隔时间</div>
             </div>
-          </div>
-        </div>
-      </details>
-      <details>
-        <summary>游戏列表页面请求控制</summary>
-        <div style="padding: 10px 0;">
-
-          <div class="settings-item">
-            <div class="settings-label">请求间隔时间(毫秒)</div>
-            <input type="number" id="requestDelay" min="500" max="5000" step="100" value="5000" style="width: 80px; text-align: center;">
+            <input type="number" id="requestDelay" min="500" max="5000" step="100" value="5000">
           </div>
           <div class="settings-item">
-            <div class="settings-label">文件请求间隔时间(毫秒)</div>
-            <input type="number" id="fileRequestDelay" min="500" max="5000" step="100" value="2000" style="width: 80px; text-align: center;">
+            <div class="settings-label">
+              <span>📁 文件请求间隔(毫秒)</span>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">模组内文件间的请求间隔</div>
+            </div>
+            <input type="number" id="fileRequestDelay" min="500" max="5000" step="100" value="2000">
           </div>
-          <div style="font-size: 12px; color: #666; margin-top: 10px;">
-            提示：较长的间隔时间可以减少被网站拦截的风险，但会增加获取链接的总时间。
-          </div>
-          <div class="settings-item" style="margin-top: 15px; flex-direction: column; align-items: center; border-bottom: none;">
-            <button id="clearCacheBtn" style="
-              padding: 8px 32px;
-              background-color: #dc3545;
-              color: white;
-              border: none;
-              border-radius: 4px;
-              cursor: pointer;
-              font-size: 14px;
-              margin-bottom: 8px;
-              display: block;
-              margin-left: auto;
-              margin-right: auto;
-            ">清除直链缓存</button>
-            <div style="font-size: 12px; color: #666; margin-top: 0; text-align: center;">
-              清除后需要重新获取直链，建议在遇到问题时使用。
+          <div style="padding: 12px 0; border-top: 1px solid var(--border-light); margin-top: 12px;">
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; text-align: center;">
+              💡 较长的间隔时间可以减少被网站拦截的风险
+            </div>
+            <button id="clearCacheBtn">🗑️ 清除直链缓存</button>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 8px; text-align: center;">
+              清除后需要重新获取直链，建议在遇到问题时使用
             </div>
           </div>
         </div>
       </details>
     </div>
 
-  <div id="authStatus" class="auth-status">
-    <div class="loading-spinner"></div>
-    <span>正在检查授权状态...</span>
-  </div>
-
-  <div id="status" class="status-loading">请访问模组详情页...</div>
-  <div id="directLink">
-
-  </div>
-  <!-- 添加推荐工具部分 -->
-  <div class="tools-container">
-    <details>
-      <summary>推荐工具</summary>
-      <div class="tools-list">
-        <a href="https://steampp.net/" class="tool-item" target="_blank">
-          <div class="tool-icon">🚀</div>
-          <div class="tool-info">
-            <div class="tool-name">Steam++</div>
-            <div class="tool-desc">Steam 工具箱，提供多种实用功能</div>
+    <div class="settings-container">
+      <details>
+        <summary>⌨️ 快捷键设置</summary>
+        <div style="padding: 16px 0;">
+          <div class="settings-item" style="flex-direction: column; align-items: flex-start;">
+            <div class="settings-label" style="margin-bottom: 8px;">
+              <span>🎮 开始/暂停解析</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <kbd>Ctrl + X</kbd>
+              <span style="font-size: 12px; color: var(--text-muted);">Mac: Command + X</span>
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+              <strong>修改方法：</strong><br>
+              1. 打开 Chrome 扩展管理页面 (chrome://extensions/shortcuts)<br>
+              2. 找到"Nexus Mods 直链工具"并设置快捷键
+            </div>
           </div>
-        </a>
-        <a href="https://pan.quark.cn/s/7317e30a17b9" class="tool-item" target="_blank">
-          <div class="tool-icon">⬇️</div>
-          <div class="tool-info">
-            <div class="tool-name">IDM下载器</div>
-            <div class="tool-desc">强大的多线程下载工具</div>
-          </div>
-        </a>
-        <button id="openAIChatBtn" class="tool-item" style="border: none; background: none; width: 100%; text-align: left; cursor: pointer;">
-          <div class="tool-icon">🤖</div>
-          <div class="tool-info">
-            <div class="tool-name">AI助手</div>
-            <div class="tool-desc">智能问答助手，随时为您解答问题</div>
-          </div>
-        </button>
-      </div>
-    </details>
-  </div>
-
-  <!-- 添加赞助板块 -->
-  <div class="tools-container">
-    <details>
-      <summary>赞助支持</summary>
-      <div class="sponsor-container">
-        <p style="text-align: center; margin-bottom: 15px; color: #666; font-size: 14px;">解放双手，告别等待！小小心意，让插件更好用。</p>
-        <div class="sponsor-images">
-          <img src="static/zfb.jpg" alt="支付宝" class="sponsor-img" data-action="show-full-image">
-          <img src="static/wx.png" alt="微信" class="sponsor-img" data-action="show-full-image">
-          <img src="static/gm.png" alt="赞赏码" class="sponsor-img" data-action="show-full-image">
         </div>
-      </div>
-    </details>
+      </details>
+    </div>
+
+    <!-- 推荐工具部分 -->
+    <div class="tools-container">
+      <details>
+        <summary>🛠️ 推荐工具</summary>
+        <div class="tools-list">
+          <a href="https://steampp.net/" class="tool-item" target="_blank">
+            <div class="tool-icon">🚀</div>
+            <div class="tool-info">
+              <div class="tool-name">Steam++</div>
+              <div class="tool-desc">Steam 工具箱，提供多种实用功能</div>
+            </div>
+          </a>
+          <a href="https://pan.quark.cn/s/7317e30a17b9" class="tool-item" target="_blank">
+            <div class="tool-icon">⬇️</div>
+            <div class="tool-info">
+              <div class="tool-name">IDM下载器</div>
+              <div class="tool-desc">强大的多线程下载工具，提升下载速度</div>
+            </div>
+          </a>
+          <button id="openAIChatBtn" class="tool-item" style="border: none; background: none; width: 100%; text-align: left;">
+            <div class="tool-icon">🤖</div>
+            <div class="tool-info">
+              <div class="tool-name">AI助手</div>
+              <div class="tool-desc">智能问答助手，随时为您解答问题</div>
+            </div>
+          </button>
+        </div>
+      </details>
+    </div>
+
+    <!-- 赞助支持板块 -->
+    <div class="tools-container">
+      <details>
+        <summary>💝 赞助支持</summary>
+        <div class="sponsor-container">
+          <p>🎉 解放双手，告别等待！小小心意，让插件更好用。</p>
+          <div class="sponsor-images">
+            <img src="static/zfb.jpg" alt="支付宝赞助" class="sponsor-img" data-action="show-full-image">
+            <img src="static/wx.png" alt="微信赞助" class="sponsor-img" data-action="show-full-image">
+            <img src="static/gm.png" alt="赞赏码" class="sponsor-img" data-action="show-full-image">
+          </div>
+        </div>
+      </details>
+    </div>
   </div>
 
+  <!-- 全屏图片查看器 -->
   <div class="fullscreen-image">
     <img src="" alt="全屏图片">
   </div>

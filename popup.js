@@ -248,11 +248,11 @@ function renderStatusTip(pageType, statusDiv, directLinkDiv) {
   return false;
 }
 
-// 动态插入样式
+// 动态插入样式 - 优化复制按钮容器样式
 const style = document.createElement('style');
 style.textContent = `
 #copyAllBtnContainer {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   text-align: right;
 }
 `;
@@ -385,8 +385,15 @@ document.addEventListener('DOMContentLoaded', () => {
     saveAdvancedSettings(requestDelay, fileRequestDelay);
   });
 
-  // 添加清除缓存按钮的点击事件
+  // 添加清除缓存按钮的点击事件 - 优化反馈效果
   document.getElementById('clearCacheBtn').addEventListener('click', () => {
+    const button = document.getElementById('clearCacheBtn');
+    const originalText = button.textContent;
+
+    // 显示加载状态
+    button.textContent = '🔄 清除中...';
+    button.disabled = true;
+
     // 获取当前标签页
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]) {
@@ -394,13 +401,19 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.tabs.sendMessage(tabs[0].id, { action: "clearCache" }, (response) => {
           if (response && response.success) {
             // 显示成功提示
-            const button = document.getElementById('clearCacheBtn');
-            const originalText = button.textContent;
-            button.textContent = '缓存已清除！';
-            button.style.backgroundColor = '#28a745';
+            button.textContent = '✅ 缓存已清除！';
+            button.style.background = 'linear-gradient(135deg, var(--success-color) 0%, #059669 100%)';
             setTimeout(() => {
               button.textContent = originalText;
-              button.style.backgroundColor = '#dc3545';
+              button.style.background = '';
+              button.disabled = false;
+            }, 2000);
+          } else {
+            // 显示错误提示
+            button.textContent = '❌ 清除失败';
+            setTimeout(() => {
+              button.textContent = originalText;
+              button.disabled = false;
             }, 2000);
           }
         });
@@ -464,7 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // 监听来自chat-window.js的消息
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((request, sender) => {
     if (request.action === 'closeChatWindow') {
       // 关闭发送消息的窗口
       chrome.windows.remove(sender.tab.windowId);
