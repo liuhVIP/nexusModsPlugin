@@ -1374,6 +1374,23 @@ document.addEventListener('DOMContentLoaded', () => {
     historyHandler.loadChat(state.chatHistory[0].id);
   }
 
+  // 监听来自父窗口的消息（用于统一聊天窗口）
+  window.addEventListener('message', (event) => {
+    console.log('🎯 AI聊天iframe收到消息:', event.data);
+
+    if (event.data && event.data.action === 'initModData') {
+      const modData = event.data.modData;
+      console.log('📦 收到模组数据:', modData);
+
+      // 创建模组数据预览
+      if (typeof createModDataPreview === 'function') {
+        createModDataPreview(modData);
+      } else {
+        console.warn('createModDataPreview 函数不存在');
+      }
+    }
+  });
+
   // 创建图片模态框
   const imageModal = document.createElement('div');
   imageModal.className = 'image-modal';

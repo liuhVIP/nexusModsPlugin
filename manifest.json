@@ -15,7 +15,9 @@
   ],
   "host_permissions": [
     "https://www.nexusmods.com/*",
-    "https://users.nexusmods.com/*"
+    "https://users.nexusmods.com/*",
+    "http://117.72.89.99:7003/*",
+    "ws://117.72.89.99:7003/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -60,9 +62,13 @@
         "static/*",
         "chat.html",
         "chat.js",
-        "ai-mod-analyzer.js"
+        "unified-chat.html",
+        "unified-chat.js",
+        "ai-mod-analyzer.js",
+        "chatroom/*",
+        "chatroom-window.html"
       ],
       "matches": ["https://www.nexusmods.com/*"]
     }
   ]
-} 
+}

@@ -999,6 +999,27 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     sendResponse({ success: true });
     return true;
+  } else if (request.action === 'openChatRoom') {
+    // 处理来自popup的聊天室打开请求
+    console.log('收到来自popup的聊天室打开请求');
+
+    // 发送消息给background script打开新窗口
+    chrome.runtime.sendMessage({
+      action: 'openChatRoomWindow'
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        console.error('发送打开聊天室窗口消息失败:', chrome.runtime.lastError.message);
+        sendResponse({ success: false, error: '聊天室功能暂时不可用: ' + chrome.runtime.lastError.message });
+      } else if (response && response.success) {
+        console.log('聊天室窗口创建成功, 窗口ID:', response.windowId);
+        sendResponse({ success: true });
+      } else {
+        console.error('聊天室窗口创建失败:', response?.error);
+        sendResponse({ success: false, error: response?.error || '聊天室窗口创建失败' });
+      }
+    });
+
+    return true; // 表示异步响应
   }
 });
 
@@ -2924,3 +2945,109 @@ if (isModDescriptionPage(location.href)) {
     console.log('当前是模组描述页面，立即初始化AI分析器');
     initAIAnalyzer();
 }
+
+// ==================== 聊天室功能初始化 ====================
+
+// 创建聊天室图标按钮（直接在content.js中创建，避免Chrome API限制）
+function createChatRoomIcon() {
+    console.log('开始创建聊天室图标...');
+
+    // 检查是否已存在
+    if (document.querySelector('.nexus-chatroom-icon-btn')) {
+        console.log('聊天室图标已存在，跳过创建');
+        return;
+    }
+
+    // 创建聊天图标按钮
+    const chatIconBtn = document.createElement('button');
+    chatIconBtn.className = 'nexus-chatroom-icon-btn';
+    chatIconBtn.innerHTML = '💬';
+    chatIconBtn.title = '打开聊天室';
+    chatIconBtn.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: #7289da;
+        color: white;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 28px;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        z-index: 999998;
+        border: none;
+        transition: all 0.3s ease;
+    `;
+
+    // 添加悬停效果
+    chatIconBtn.addEventListener('mouseenter', function() {
+        this.style.backgroundColor = '#677bc4';
+        this.style.transform = 'scale(1.1)';
+    });
+
+    chatIconBtn.addEventListener('mouseleave', function() {
+        this.style.backgroundColor = '#7289da';
+        this.style.transform = 'scale(1)';
+    });
+
+    // 点击事件：发送消息给background script打开新窗口
+    chatIconBtn.addEventListener('click', () => {
+        console.log('聊天室图标被点击，发送消息给background script');
+
+        // 发送消息给background script打开聊天室窗口
+        chrome.runtime.sendMessage({
+            action: 'openChatRoomWindow'
+        }, (response) => {
+            if (chrome.runtime.lastError) {
+                console.error('发送打开聊天室窗口消息失败:', chrome.runtime.lastError.message);
+            } else if (response && response.success) {
+                console.log('聊天室窗口创建成功, 窗口ID:', response.windowId);
+            } else {
+                console.error('聊天室窗口创建失败:', response?.error);
+            }
+        });
+    });
+
+    document.body.appendChild(chatIconBtn);
+    console.log('✅ 聊天室图标创建成功');
+}
+
+// 初始化聊天室功能
+window.initChatRoom = function initChatRoom() {
+    console.log('开始初始化聊天室功能...');
+
+    // 检查是否在Nexus Mods网站
+    if (!window.location.hostname.includes('nexusmods.com')) {
+        console.log('不在Nexus Mods网站，跳过聊天室初始化');
+        return;
+    }
+
+    // 防止重复初始化
+    if (window.nexusChatRoomInitialized) {
+        console.log('聊天室已初始化，跳过重复执行');
+        return;
+    }
+
+    try {
+        // 直接在content.js中创建聊天图标（有Chrome API访问权限）
+        createChatRoomIcon();
+        window.nexusChatRoomInitialized = true;
+        console.log('✅ 聊天室初始化完成');
+    } catch (error) {
+        console.error('聊天室初始化失败:', error);
+    }
+};
+
+// 在页面加载完成后初始化聊天室
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', window.initChatRoom);
+} else {
+    // DOM已经加载完成，直接初始化
+    window.initChatRoom();
+}
+
+// 注意：不再需要监听popup的聊天室消息，因为我们直接在content.js中处理聊天图标点击

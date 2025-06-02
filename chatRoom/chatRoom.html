@@ -1,0 +1,1963 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线聊天室123</title>
+    <!-- 引入SockJS和STOMP客户端库 -->
+    <script src="../lib/sockjs.min.js"></script>
+    <script src="../lib/stomp.min.js"></script>
+    <script src="../lib/jquery-3.6.0.min.js"></script>
+
+    <style>
+        /* ===== CSS变量定义 - 现代化主题色彩 ===== */
+        :root {
+            /* 主色调 */
+            --primary-bg: #0f1419;
+            --secondary-bg: #1a1f29;
+            --tertiary-bg: #252b37;
+            --accent-bg: #2d3748;
+
+            /* 文字颜色 */
+            --text-primary: #e2e8f0;
+            --text-secondary: #a0aec0;
+            --text-muted: #718096;
+
+            /* 强调色 */
+            --accent-blue: #4299e1;
+            --accent-purple: #805ad5;
+            --accent-green: #48bb78;
+            --accent-red: #f56565;
+            --accent-orange: #ed8936;
+
+            /* 边框和分割线 */
+            --border-color: #2d3748;
+            --border-light: #4a5568;
+
+            /* 阴影 */
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+            --shadow-lg: 0 8px 25px rgba(0, 0, 0, 0.25);
+
+            /* 圆角 */
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+
+            /* 间距 */
+            --space-xs: 4px;
+            --space-sm: 8px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+        }
+
+        /* ===== 基础样式重置 ===== */
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: linear-gradient(135deg, var(--primary-bg) 0%, var(--secondary-bg) 100%);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            overflow: hidden;
+            line-height: 1.6;
+        }
+
+        /* ===== 模态框基础样式 ===== */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 999;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .modal-content {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            padding: var(--space-lg);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+            position: relative;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* ===== 聊天头部样式 ===== */
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: var(--space-md);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: var(--space-md);
+            gap: var(--space-md);
+            flex-wrap: wrap;
+        }
+
+        .chat-header h2 {
+            margin: 0;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .chat-header .close-btn {
+            background: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: var(--space-sm);
+            font-size: 18px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+        }
+
+        .chat-header .close-btn:hover {
+            background: var(--accent-red);
+            color: white;
+            border-color: var(--accent-red);
+            transform: scale(1.05);
+        }
+
+        /* ===== 聊天容器布局 ===== */
+        .chat-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            gap: var(--space-md);
+        }
+
+        /* ===== 侧边栏样式 ===== */
+        .chat-sidebar {
+            width: 220px;
+            background: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            padding: var(--space-md);
+            border-radius: var(--radius-md);
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .chat-sidebar h3 {
+            margin: 0 0 var(--space-md) 0;
+            color: var(--text-primary);
+            font-size: 16px;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: var(--space-sm);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--space-sm);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .chat-sidebar h3 .sidebar-title {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .chat-sidebar h3 .sidebar-title::before {
+            content: "👥";
+            font-size: 14px;
+        }
+
+        /* 收起/展开按钮样式 */
+        .sidebar-toggle-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: var(--space-xs);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            font-size: 12px;
+        }
+
+        .sidebar-toggle-btn:hover {
+            background: var(--accent-bg);
+            color: var(--text-primary);
+            transform: scale(1.1);
+        }
+
+        .toggle-icon {
+            transition: transform 0.3s ease;
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        /* 收起状态的样式 - 向左收起 */
+        .chat-sidebar.collapsed {
+            width: 40px; /* 收起时只显示按钮宽度 */
+            overflow: hidden;
+        }
+
+        .chat-sidebar.collapsed .toggle-icon {
+            transform: rotate(180deg); /* 箭头指向右边表示可以展开 */
+        }
+
+        .chat-sidebar.collapsed .sidebar-title {
+            opacity: 0;
+            transform: translateX(-100%);
+        }
+
+        .chat-sidebar.collapsed .user-list {
+            opacity: 0;
+            transform: translateX(-100%);
+            pointer-events: none;
+        }
+
+        /* 收起状态下的标题栏样式 */
+        .chat-sidebar.collapsed h3 {
+            justify-content: center; /* 按钮居中显示 */
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        /* 收起状态下隐藏标题文字，只显示按钮 */
+        .chat-sidebar.collapsed .sidebar-title {
+            display: none;
+        }
+
+        /* 收起状态下的按钮样式优化 */
+        .chat-sidebar.collapsed .sidebar-toggle-btn {
+            background: var(--accent-bg);
+            border: 1px solid var(--border-light);
+        }
+
+        .chat-sidebar.collapsed .sidebar-toggle-btn:hover {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        /* 添加平滑过渡效果 */
+        .chat-sidebar {
+            transition: width 0.3s ease;
+        }
+
+        .sidebar-title {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .user-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            flex-grow: 1;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-color) transparent;
+            /* 添加平滑过渡动画 - 向左滑动 */
+            max-height: 300px;
+            opacity: 1;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .user-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .user-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .user-list::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 2px;
+        }
+
+        .user-list li {
+            padding: var(--space-sm) var(--space-xs);
+            color: var(--text-secondary);
+            font-size: 14px;
+            border-radius: var(--radius-sm);
+            margin-bottom: var(--space-xs);
+            transition: all 0.2s ease;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+        }
+
+        .user-list li:hover {
+            background: var(--accent-bg);
+            color: var(--text-primary);
+            transform: translateX(2px);
+        }
+
+        .user-list li::before {
+            content: "●";
+            color: var(--accent-green);
+            font-size: 8px;
+        }
+
+        /* ===== 聊天主区域样式 ===== */
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* ===== 消息区域样式 ===== */
+        .messages {
+            flex: 1;
+            padding: var(--space-md);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-md);
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-color) transparent;
+            scroll-behavior: smooth;
+        }
+
+        .messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .messages::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .messages::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 3px;
+        }
+
+        .messages::-webkit-scrollbar-thumb:hover {
+            background: var(--border-light);
+        }
+
+        /* ===== 消息容器样式 ===== */
+        .message-container {
+            display: flex;
+            flex-direction: column;
+            /* max-width: 75%; */
+            animation: messageSlideIn 0.3s ease-out;
+        }
+
+        @keyframes messageSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-container.sent {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+
+        .message-container.received {
+            align-self: flex-start;
+            align-items: flex-start;
+        }
+
+        .message-container .user-info {
+            display: flex;
+            align-items: baseline;
+            gap: var(--space-sm);
+            margin-bottom: var(--space-xs);
+        }
+
+        .message-container.sent .user-info {
+            flex-direction: row-reverse;
+        }
+
+        .message-container .username {
+            font-weight: 600;
+            color: var(--accent-blue);
+            font-size: 13px;
+            letter-spacing: 0.3px;
+        }
+
+        .message-container .timestamp {
+            font-size: 11px;
+            color: var(--text-muted);
+            opacity: 0.8;
+        }
+
+        /* ===== 消息气泡样式 ===== */
+        .message {
+            background: var(--accent-bg);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-lg);
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-primary);
+            position: relative;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+        }
+
+        .message-container.sent .message {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: white;
+            border-color: var(--accent-blue);
+        }
+
+        .message-container.received .message {
+            background: var(--accent-bg);
+            border-color: var(--border-light);
+        }
+
+        /* ===== 系统消息样式 ===== */
+        .message-container.system {
+            display: flex;
+            justify-content: center;
+            margin: var(--space-xs) 0;
+        }
+
+        .message-container.system .message {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            background: rgba(0, 0, 0, 0.2);
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+            text-align: center;
+            max-width: 80%;
+            margin: 0 auto;
+            border: none;
+            font-style: normal;
+            font-weight: normal;
+        }
+
+        .message-container.system.error .message {
+            background: rgba(220, 53, 69, 0.3);
+            color: rgba(220, 53, 69, 0.9);
+        }
+
+        .message-container.system.broadcast .message {
+            background: rgba(40, 167, 69, 0.3);
+            color: rgba(40, 167, 69, 0.9);
+        }
+
+        .message-container.system.info .message {
+            background: rgba(0, 123, 255, 0.3);
+            color: rgba(0, 123, 255, 0.9);
+        }
+
+        /* ===== 输入区域样式 ===== */
+        .input-area {
+            padding: 0;
+            border-top: 1px solid var(--border-color);
+            background: var(--secondary-bg);
+        }
+
+        /* 输入容器 - 包含三个区域的整体容器 */
+        .input-container {
+            background: var(--accent-bg);
+            border: none;
+            border-top: 1px solid var(--border-color);
+            border-radius: 0;
+            transition: all 0.2s ease;
+            overflow: visible;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .input-container:focus-within {
+            border-top-color: var(--accent-blue);
+            box-shadow: inset 0 2px 0 0 var(--accent-blue);
+            background: var(--tertiary-bg);
+        }
+
+        /* 工具栏 - 第一行 */
+        .input-toolbar {
+            display: flex;
+            align-items: center;
+            padding: var(--space-sm) var(--space-md) 0 var(--space-md);
+        }
+
+        /* 表情工具栏样式 */
+        .emoji-tools {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+        }
+
+        /* 输入框包装器 - 第二行，更高 */
+        .input-wrapper {
+            position: relative;
+            padding: var(--space-sm) var(--space-md);
+            min-height: 80px;
+            display: flex;
+            align-items: flex-start;
+            direction: ltr;
+        }
+
+        /* 发送按钮区域 - 第三行 */
+        .send-btn-container {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 0 var(--space-md) var(--space-md) var(--space-md);
+        }
+
+        .message-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-size: 14px;
+            color: var(--text-primary);
+            min-height: 40px;
+            max-height: 120px;
+            overflow-y: auto;
+            resize: none;
+            line-height: 1.4;
+            padding: 8px 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: inherit;
+            /* 修复换行显示问题 */
+            display: block; /* 改为block，避免flex导致的换行问题 */
+            /* 滚动条样式 */
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-light) transparent;
+        }
+
+        /* 输入框滚动条美化 */
+        .message-input::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .message-input::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .message-input::-webkit-scrollbar-thumb {
+            background: var(--border-light);
+            border-radius: 3px;
+            transition: background 0.2s ease;
+        }
+
+        .message-input::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-blue);
+        }
+
+        /* Placeholder样式 - 改进的显示机制 */
+        .message-input.empty:before {
+            content: attr(placeholder);
+            color: var(--text-muted);
+            pointer-events: none;
+            position: absolute;
+            top: 8px; /* 与输入框的padding对齐 */
+            left: 0;
+            right: 0;
+            line-height: 1.4; /* 与输入框的line-height一致 */
+            z-index: 1;
+        }
+
+        .message-input:not(.empty):before,
+        .message-input:focus:before {
+            display: none;
+        }
+
+        /* 处理只有换行符的特殊情况 */
+        .message-input.has-line-breaks-only {
+            min-height: 40px;
+        }
+
+        /* ===== 发送按钮样式 - 在发送按钮区域中 ===== */
+        .send-btn {
+            width: 36px;
+            height: 36px;
+            background: var(--border-color);
+            color: var(--text-muted);
+            border: none;
+            border-radius: 50%;
+            cursor: not-allowed;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+            opacity: 0.6;
+        }
+
+        /* 发送按钮图标样式 */
+        .send-btn img {
+            width: 18px;
+            height: 18px;
+            filter: grayscale(100%) opacity(0.5);
+            transition: all 0.2s ease;
+        }
+
+
+
+        /* 激活状态的发送按钮 */
+        .send-btn.active:not(:disabled) {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: white;
+            cursor: pointer;
+            opacity: 1;
+        }
+
+        .send-btn.active:not(:disabled) img {
+            filter: none; /* 移除灰度和透明度 */
+        }
+
+        .send-btn.active:not(:disabled):hover {
+            transform: translateY(-1px) scale(1.05);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        }
+
+        .send-btn.active:not(:disabled):active {
+            transform: translateY(0) scale(0.98);
+        }
+
+        /* 加载状态的发送按钮 */
+        .send-btn.loading {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: white;
+            cursor: not-allowed;
+            opacity: 1;
+        }
+
+        .send-btn.loading img {
+            animation: spin 1s linear infinite;
+            filter: none;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* 发送按钮光效 - 只在激活状态显示 */
+        .send-btn.active::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            transition: left 0.5s ease;
+        }
+
+        .send-btn.active:hover:not(:disabled)::before {
+            left: 100%;
+        }
+
+        /* 发送按钮图标 */
+        .send-btn .send-icon {
+            font-size: 18px;
+            line-height: 1;
+        }
+
+        .emoji-btn {
+            background: transparent;
+            border: none;
+            padding: 4px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 28px;
+            min-width: 28px;
+            border-radius: 4px;
+        }
+
+        .emoji-btn img {
+            width: 20px;
+            height: 20px;
+            filter: grayscale(20%) opacity(0.7);
+            transition: all 0.2s ease;
+        }
+
+        .emoji-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: scale(1.1);
+        }
+
+        .emoji-btn:hover img {
+            filter: none;
+            opacity: 1;
+        }
+
+        .emoji-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* ===== 按钮图标样式 ===== */
+        .send-btn span:first-child,
+        .edit-username-btn,
+        .close-btn {
+            font-size: 16px;
+            line-height: 1;
+            user-select: none;
+        }
+
+        /* .chat-icon-btn {
+            font-size: 24px;
+            line-height: 1;
+            user-select: none;
+        } */
+
+        /* ===== 表情面板样式 ===== */
+        .emoji-panel {
+            position: absolute;
+            bottom: 50px;
+            left: 0;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            display: none;
+            flex-direction: column;
+            width: 320px;
+            max-height: 280px;
+            overflow: hidden;
+            z-index: 1001;
+            animation: panelSlideUp 0.2s ease-out;
+        }
+
+        @keyframes panelSlideUp {
+            from {
+                opacity: 0;
+                transform: translateY(10px) scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .emoji-panel.show {
+            display: flex;
+        }
+
+        .emoji-categories {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--tertiary-bg);
+        }
+
+        .emoji-category {
+            padding: var(--space-sm) var(--space-md);
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            flex: 1;
+            text-align: center;
+        }
+
+        .emoji-category:hover {
+            background: var(--accent-bg);
+            color: var(--text-secondary);
+        }
+
+        .emoji-category.active {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        .emoji-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-sm);
+            scrollbar-width: thin;
+            scrollbar-color: var(--border-color) transparent;
+        }
+
+        .emoji-content::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .emoji-content::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 2px;
+        }
+
+        .emoji-section {
+            display: none;
+        }
+
+        .emoji-section.active {
+            display: block;
+        }
+
+        .emoji-list,
+        .kaomoji-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-xs);
+        }
+
+        .emoji-item,
+        .kaomoji-item {
+            font-size: 20px;
+            cursor: pointer;
+            padding: var(--space-xs);
+            border-radius: var(--radius-sm);
+            transition: all 0.1s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 32px;
+            min-height: 32px;
+        }
+
+        .emoji-item:hover,
+        .kaomoji-item:hover {
+            background: var(--accent-bg);
+            transform: scale(1.1);
+        }
+
+        /* ===== 图片预览模态框样式 ===== */
+        #imageModal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(10px);
+            z-index: 10000;
+            overflow: hidden;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        #imageModal.show {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #modalImage {
+            max-width: 90%;
+            max-height: 90vh;
+            object-fit: contain;
+            cursor: move;
+            transition: transform 0.1s ease-out;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+        }
+
+        #imageModal .close-btn {
+            position: absolute;
+            top: var(--space-lg);
+            right: var(--space-lg);
+            background: var(--accent-red);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            box-shadow: var(--shadow-md);
+        }
+
+        #imageModal .close-btn:hover {
+            background: #e53e3e;
+            transform: scale(1.1);
+        }
+
+        .zoom-info {
+            position: fixed;
+            bottom: var(--space-lg);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 500;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 10001;
+            box-shadow: var(--shadow-md);
+        }
+
+        .zoom-info.show {
+            opacity: 1;
+        }
+
+        /* ===== 聊天图片样式 ===== */
+        .message img {
+            max-width: 240px;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .message img:hover {
+            transform: scale(1.02);
+            box-shadow: var(--shadow-md);
+        }
+
+        .message img.loading {
+            filter: blur(2px);
+            animation: imageLoading 1.5s infinite;
+        }
+
+        @keyframes imageLoading {
+            0%, 100% {
+                opacity: 0.6;
+                filter: blur(2px);
+            }
+            50% {
+                opacity: 1;
+                filter: blur(1px);
+            }
+        }
+
+        /* ===== 输入框图片样式 ===== */
+        #messageInput img {
+            max-width: 120px;
+            border-radius: var(--radius-sm);
+            margin: var(--space-xs);
+            vertical-align: middle;
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.2s ease;
+        }
+
+        #messageInput img:hover {
+            transform: scale(1.05);
+        }
+
+
+
+
+
+        /* ===== 加载提示样式 ===== */
+        .loading-message-container {
+            text-align: center;
+            padding: var(--space-md);
+            color: var(--text-muted);
+        }
+
+        .center-message {
+            text-align: center;
+            padding: var(--space-sm);
+            color: var(--text-muted);
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .center-message.error {
+            color: var(--accent-red);
+            font-weight: 500;
+        }
+
+        /* ===== 弹幕样式 ===== */
+        .danmaku-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            z-index: 998;
+        }
+
+        .danmaku {
+            position: absolute;
+            white-space: nowrap;
+            font-size: 18px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+            animation: danmakuMove 8s linear forwards;
+            opacity: 0.95;
+            will-change: transform, opacity;
+            padding: var(--space-xs) var(--space-sm);
+            border-radius: var(--radius-sm);
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(4px);
+            font-weight: 500;
+        }
+
+        @keyframes danmakuMove {
+            0% {
+                transform: translateX(100vw);
+                opacity: 0;
+            }
+            5% {
+                opacity: 0.95;
+            }
+            95% {
+                opacity: 0.95;
+            }
+            100% {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+        }
+
+        /* ===== 弹幕开关样式 ===== */
+        .danmaku-switch {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            margin-left: auto;
+        }
+
+        .danmaku-switch input[type="checkbox"] {
+            position: relative;
+            width: 48px;
+            height: 24px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: var(--accent-bg);
+            outline: none;
+            border-radius: 24px;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .danmaku-switch input[type="checkbox"]:checked {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+
+        .danmaku-switch input[type="checkbox"]:before {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            top: 1px;
+            left: 1px;
+            background: white;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.3s ease;
+        }
+
+        .danmaku-switch input[type="checkbox"]:checked:before {
+            left: 25px;
+        }
+
+        .danmaku-switch label {
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        /* ===== 用户名修改弹窗样式 ===== */
+        .username-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        .username-modal .modal-content {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            padding: var(--space-xl);
+            border-radius: var(--radius-lg);
+            width: 400px;
+            max-width: 90%;
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+            animation: slideUp 0.3s ease-out;
+        }
+
+        .username-modal h3 {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 0 0 var(--space-lg) 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .username-modal input[type="text"] {
+            width: 100%;
+            padding: var(--space-md);
+            margin-bottom: var(--space-lg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            background: var(--tertiary-bg);
+            color: var(--text-primary);
+            font-size: 16px;
+            outline: none;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+
+        .username-modal input[type="text"]:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.2);
+            background: var(--accent-bg);
+        }
+
+        .username-modal input[type="text"]::placeholder {
+            color: var(--text-muted);
+        }
+
+        .username-modal .buttons {
+            display: flex;
+            gap: var(--space-md);
+            justify-content: center;
+        }
+
+        .username-modal .buttons button {
+            padding: var(--space-sm) var(--space-lg);
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            min-width: 100px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .username-modal .buttons .cancel-btn {
+            background: var(--accent-red);
+            color: white;
+        }
+
+        .username-modal .buttons .cancel-btn:hover {
+            background: #e53e3e;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .username-modal .buttons .confirm-btn {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        .username-modal .buttons .confirm-btn:hover {
+            background: #38a169;
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* ===== 系统消息框样式 ===== */
+        #message-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        #message-modal .modal-content {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            padding: var(--space-xl);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            width: 450px;
+            max-width: 90%;
+            text-align: center;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        #message-modal .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-md);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: var(--space-sm);
+        }
+
+        #message-modal .modal-header h2 {
+            margin: 0;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        #message-modal .modal-header .close-btn {
+            background: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            font-size: 16px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #message-modal .modal-header .close-btn:hover {
+            background: var(--accent-red);
+            color: white;
+            border-color: var(--accent-red);
+            transform: scale(1.1);
+        }
+
+        #message-modal .modal-body p {
+            color: var(--text-primary);
+            line-height: 1.6;
+            margin-bottom: var(--space-lg);
+            font-size: 15px;
+        }
+
+        #message-modal .modal-footer {
+            text-align: center;
+        }
+
+        #message-modal .modal-footer .btn {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            color: white;
+            padding: var(--space-sm) var(--space-xl);
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            box-shadow: var(--shadow-sm);
+            min-width: 120px;
+        }
+
+        #message-modal .modal-footer .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* ===== 加载更多历史消息按钮样式 ===== */
+        .load-history-btn {
+            background: var(--accent-bg);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: var(--space-sm) var(--space-md);
+            margin: var(--space-md) auto;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 500;
+            width: fit-content;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .load-history-btn:hover:not(:disabled) {
+            background: var(--tertiary-bg);
+            color: var(--text-primary);
+            border-color: var(--border-light);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .load-history-btn:disabled {
+            background: var(--accent-bg);
+            color: var(--text-muted);
+            cursor: not-allowed;
+            opacity: 0.5;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* ===== 加载动画组件样式 ===== */
+        .loading-spinner {
+            font-size: 20px;
+            color: var(--accent-blue);
+            animation: spinRotate 1s linear infinite;
+            margin-bottom: var(--space-sm);
+        }
+
+        @keyframes spinRotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text2 {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        /* ===== 聊天室右键菜单样式 ===== */
+        .context-menu {
+            display: none;
+            position: fixed;
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-lg);
+            z-index: 1000;
+            min-width: 180px;
+            padding: var(--space-xs) 0;
+            opacity: 0;
+            transform: scale(0.95);
+            transform-origin: top left;
+            transition: all 0.15s ease;
+            backdrop-filter: blur(8px);
+        }
+
+        .context-menu.show {
+            display: block;
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        .context-menu .menu-item {
+            padding: var(--space-sm) var(--space-md);
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            transition: all 0.15s ease;
+            border-radius: 0;
+        }
+
+        .context-menu .menu-item:hover {
+            background: var(--accent-bg);
+            color: var(--text-primary);
+        }
+
+        .context-menu .menu-item:first-child {
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+        }
+
+        .context-menu .menu-item:first-child:hover {
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+        }
+
+        .context-menu .menu-item:last-child {
+            border-radius: 0 0 var(--radius-md) var(--radius-md);
+        }
+
+        .context-menu .menu-item:last-child:hover {
+            border-radius: 0 0 var(--radius-md) var(--radius-md);
+        }
+
+        /* 如果只有一个菜单项，四个角都应该是圆角 */
+        .context-menu .menu-item:only-child {
+            border-radius: var(--radius-md);
+        }
+
+        .context-menu .menu-item:only-child:hover {
+            border-radius: var(--radius-md);
+        }
+
+        .context-menu .menu-item span:first-child {
+            font-size: 14px;
+            width: 16px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* ===== 响应式设计 ===== */
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95%;
+                max-height: 95vh;
+                padding: var(--space-md);
+            }
+
+            .chat-container {
+                flex-direction: column;
+            }
+
+            .chat-sidebar {
+                width: 100%;
+                margin-right: 0;
+                margin-bottom: var(--space-md);
+                max-height: 120px;
+            }
+
+            /* 移动设备上收起状态的优化 - 向左收起 */
+            .chat-sidebar.collapsed {
+                width: 40px; /* 收起时只显示按钮宽度 */
+                margin-bottom: var(--space-sm);
+            }
+
+            /* 移动设备上的收起/展开按钮优化 */
+            .sidebar-toggle-btn {
+                width: 28px;
+                height: 28px;
+                font-size: 14px;
+            }
+
+            .emoji-panel {
+                width: 280px;
+            }
+
+            .message-container {
+                max-width: 85%;
+            }
+        }
+
+        /* ===== 用户信息和连接状态样式 ===== */
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .edit-username-btn {
+            background: var(--tertiary-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: var(--space-xs);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+        }
+
+        .edit-username-btn:hover {
+            background: var(--accent-blue);
+            color: white;
+            border-color: var(--accent-blue);
+            transform: scale(1.1);
+        }
+
+        #connection-status {
+            color: var(--text-muted);
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        /* ===== 聊天消息图片样式 ===== */
+        .message-images {
+            margin-top: var(--space-xs);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-xs);
+        }
+
+        .image-wrapper {
+            position: relative;
+            display: inline-block;
+            max-width: 100%;
+        }
+
+        .chat-image {
+            max-width: 200px;
+            max-height: 150px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid var(--border-color);
+            object-fit: cover;
+            display: block;
+        }
+
+        .chat-image:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border-color: var(--primary-color);
+        }
+
+        .image-error {
+            padding: var(--space-sm);
+            background: var(--error-bg);
+            color: var(--error-color);
+            border-radius: var(--border-radius);
+            font-size: 12px;
+            text-align: center;
+            border: 1px solid var(--error-border);
+        }
+
+        .message-text {
+            margin-bottom: var(--space-xs);
+        }
+
+        /* ===== 图片放大模态框样式 ===== */
+        .image-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+            cursor: pointer;
+            animation: fadeIn 0.3s ease;
+            overflow: hidden;
+        }
+
+        .image-modal img {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            border-radius: var(--border-radius);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            transition: transform 0.2s ease;
+            user-select: none;
+            pointer-events: none;
+        }
+
+        /* 关闭按钮样式 */
+        .image-modal .close-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            z-index: 10002;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .image-modal .close-button:hover {
+            background: rgba(255, 0, 0, 0.8);
+            border-color: rgba(255, 255, 255, 0.6);
+            transform: scale(1.1);
+        }
+
+        /* 缩放信息显示 */
+        .image-modal .zoom-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-weight: bold;
+            z-index: 10001;
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        /* 操作提示 */
+        .image-modal .help-info {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            text-align: center;
+            z-index: 10001;
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* ===== 混合消息样式优化 ===== */
+        .message-container.sent .message-images,
+        .message-container.received .message-images {
+            margin-top: var(--space-xs);
+        }
+
+        .message-container.sent .message-text + .message-images,
+        .message-container.received .message-text + .message-images {
+            margin-top: var(--space-sm);
+        }
+
+        /* ===== 响应式图片样式 ===== */
+        @media (max-width: 768px) {
+            .chat-image {
+                max-width: 150px;
+                max-height: 120px;
+            }
+
+            .image-modal img {
+                max-width: 95%;
+                max-height: 95%;
+            }
+        }
+
+        /* ===== 图片上传和预览样式 ===== */
+        .image-upload-btn {
+            border-radius: 6px;
+            color: var(--text-color);
+            cursor: pointer;
+            padding: 8px;
+            margin-right: 8px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 36px;
+            height: 36px;
+        }
+
+        .image-upload-btn:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+            color: white;
+            transform: scale(1.05);
+        }
+
+        .image-upload-btn i {
+            font-size: 16px;
+        }
+
+        /* 输入框图片预览样式 */
+        .image-preview {
+            display: inline-block;
+            position: relative;
+            margin: 4px;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+
+        .image-preview:hover {
+            border-color: var(--primary-color);
+            transform: scale(1.02);
+        }
+
+        .image-preview img {
+            max-width: 100px;
+            max-height: 100px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .image-delete-btn {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 20px;
+            height: 20px;
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            opacity: 0.8;
+        }
+
+        .image-delete-btn:hover {
+            opacity: 1;
+            background: rgba(255, 0, 0, 1);
+            transform: scale(1.1);
+        }
+
+        /* 拖拽悬停效果 */
+        .message-input.drag-over {
+            border-color: var(--primary-color) !important;
+            background: rgba(var(--primary-color-rgb), 0.1) !important;
+        }
+
+
+    </style>
+</head>
+
+<body>
+    <!-- 弹幕容器 -->
+    <div class="danmaku-container"></div>
+
+    <!-- 聊天图标按钮 (用于打开聊天室) -->
+    <!-- <div class="chat-icon-btn" style="display: none;">
+        💬
+    </div> -->
+
+    <!-- 聊天室主容器 -->
+    <div id="chat-modal" class="modal" style="display: flex;">
+        <div class="modal-content">
+            <div class="chat-header">
+                <h2>在线聊天室3444</h2>
+                <div class="danmaku-switch">
+                    <input type="checkbox" id="danmaku-toggle" checked>
+                    <label for="danmaku-toggle">弹幕显示</label>
+                </div>
+                <div class="user-info">
+                    <span>当前用户: <span id="currentUsername"></span></span>
+                    <button class="edit-username-btn" onclick="changeUsername()" title="修改用户名">
+                        ✏️
+                    </button>
+                </div>
+                <div id="connection-status">连接中...</div>
+            </div>
+            <div class="chat-container">
+                <div class="chat-sidebar">
+                    <h3>
+                        <span class="sidebar-title">在线用户</span>
+                        <button class="sidebar-toggle-btn" id="userListToggle" title="收起/展开用户列表">
+                            <span class="toggle-icon">◀</span>
+                        </button>
+                    </h3>
+                    <ul class="user-list" id="userList"></ul>
+                </div>
+                <div class="chat-main">
+                    <div class="messages" id="messages"></div>
+                    <div class="input-area">
+                        <div class="input-container">
+                            <!-- 工具栏 - 在输入框上方 -->
+                            <div class="input-toolbar">
+                                <div class="emoji-tools">
+                                    <button class="emoji-btn" id="emoji-btn">
+                                        <img src="../images/表情.png" alt="表情" />
+                                    </button>
+                                    <!-- 表情选择面板 -->
+                                    <div class="emoji-panel" id="emoji-panel">
+                                        <div class="emoji-categories">
+                                            <div class="emoji-category active" data-category="emoji">表情</div>
+                                            <div class="emoji-category" data-category="kaomoji">颜文字</div>
+                                        </div>
+                                        <div class="emoji-content">
+                                            <div class="emoji-section active" id="emoji-section">
+                                                <div class="emoji-list">
+                                                    <span class="emoji-item" data-emoji="😊">😊</span>
+                                                    <span class="emoji-item" data-emoji="😂">😂</span>
+                                                    <span class="emoji-item" data-emoji="🤣">🤣</span>
+                                                    <span class="emoji-item" data-emoji="😍">😍</span>
+                                                    <span class="emoji-item" data-emoji="🥰">🥰</span>
+                                                    <span class="emoji-item" data-emoji="😘">😘</span>
+                                                    <span class="emoji-item" data-emoji="🤗">🤗</span>
+                                                    <span class="emoji-item" data-emoji="🤔">🤔</span>
+                                                    <span class="emoji-item" data-emoji="🤨">🤨</span>
+                                                    <span class="emoji-item" data-emoji="😏">😏</span>
+                                                    <span class="emoji-item" data-emoji="😮">😮</span>
+                                                    <span class="emoji-item" data-emoji="😭">😭</span>
+                                                    <span class="emoji-item" data-emoji="😱">😱</span>
+                                                    <span class="emoji-item" data-emoji="😡">😡</span>
+                                                    <span class="emoji-item" data-emoji="🤬">🤬</span>
+                                                    <span class="emoji-item" data-emoji="🥺">🥺</span>
+                                                    <span class="emoji-item" data-emoji="👍">👍</span>
+                                                    <span class="emoji-item" data-emoji="👎">👎</span>
+                                                    <span class="emoji-item" data-emoji="👏">👏</span>
+                                                    <span class="emoji-item" data-emoji="🙏">🙏</span>
+                                                    <span class="emoji-item" data-emoji="🎮">🎮</span>
+                                                    <span class="emoji-item" data-emoji="❤️">❤️</span>
+                                                    <span class="emoji-item" data-emoji="💔">💔</span>
+                                                    <span class="emoji-item" data-emoji="💪">💪</span>
+                                                </div>
+                                            </div>
+                                            <div class="emoji-section" id="kaomoji-section">
+                                                <div class="kaomoji-list">
+                                                    <span class="kaomoji-item" data-emoji="(｡◕‿◕｡)">(｡◕‿◕｡)</span>
+                                                    <span class="kaomoji-item" data-emoji="(◕‿◕✿)">(◕‿◕✿)</span>
+                                                    <span class="kaomoji-item" data-emoji="(｡♥‿♥｡)">(｡♥‿♥｡)</span>
+                                                    <span class="kaomoji-item" data-emoji="(づ｡◕‿‿◕｡)づ">(づ｡◕‿‿◕｡)づ</span>
+                                                    <span class="kaomoji-item" data-emoji="(｀・ω・´)">(｀・ω・´)</span>
+                                                    <span class="kaomoji-item" data-emoji="(╯°□°）╯︵ ┻━┻">(╯°□°）╯︵ ┻━┻</span>
+                                                    <span class="kaomoji-item" data-emoji="┬─┬ ノ( ゜-゜ノ)">┬─┬ ノ( ゜-゜ノ)</span>
+                                                    <span class="kaomoji-item" data-emoji="(╯︵╰,)">(╯︵╰,)</span>
+                                                    <span class="kaomoji-item" data-emoji="(っ˘̩╭╮˘̩)っ">(っ˘̩╭╮˘̩)っ</span>
+                                                    <span class="kaomoji-item" data-emoji="(｡•́︿•̀｡)">(｡•́︿•̀｡)</span>
+                                                    <span class="kaomoji-item" data-emoji="(；一_一)">(；一_一)</span>
+                                                    <span class="kaomoji-item" data-emoji="(¬_¬)">(¬_¬)</span>
+                                                    <span class="kaomoji-item" data-emoji="ಠ_ಠ">ಠ_ಠ</span>
+                                                    <span class="kaomoji-item" data-emoji="(◡‿◡✿)">(◡‿◡✿)</span>
+                                                    <span class="kaomoji-item" data-emoji="(✿◠‿◠)">(✿◠‿◠)</span>
+                                                    <span class="kaomoji-item" data-emoji="(◕‿◕✿)">(◕‿◕✿)</span>
+                                                    <span class="kaomoji-item" data-emoji="(｡◕‿◕｡)">(｡◕‿◕｡)</span>
+                                                    <span class="kaomoji-item" data-emoji="(｡♥‿♥｡)">(｡♥‿♥｡)</span>
+                                                    <span class="kaomoji-item" data-emoji="(◠‿◠✿)">(◠‿◠✿)</span>
+                                                    <span class="kaomoji-item" data-emoji="(づ￣ ³￣)づ">(づ￣ ³￣)づ</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 输入框区域 -->
+                            <div class="input-wrapper">
+                                <div id="messageInput" class="message-input empty" contenteditable="true">
+                                </div>
+                            </div>
+                            <!-- 发送按钮区域 -->
+                            <div class="send-btn-container">
+                                <button class="send-btn" disabled>
+                                    <img src="../images/send.png" alt="发送" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户名修改弹窗 -->
+    <div id="username-modal" class="username-modal">
+        <div class="modal-content">
+            <h3>修改用户名</h3>
+            <input type="text" id="new-username" placeholder="请输入新的用户名">
+            <div class="buttons">
+                <button class="cancel-btn" onclick="closeUsernameModal()">取消</button>
+                <button class="confirm-btn" onclick="confirmUsernameChange()">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 图片预览模态框 -->
+    <div id="imageModal" class="modal">
+        <button class="close-btn">&times;</button>
+        <img id="modalImage" src="" alt="预览图片">
+        <div class="zoom-info">缩放: 100%</div>
+    </div>
+
+    <!-- 系统消息弹窗 (用于显示提示、错误等) -->
+    <div id="message-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="message-title">提示</h2>
+                <button class="close-btn" onclick="closeMessageModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p id="message-content"></p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn save-btn" onclick="closeMessageModal()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 聊天室右键菜单 -->
+    <div id="chat-context-menu" class="context-menu">
+        <div class="menu-item clear-chat">
+            <span>🗑️</span>
+            <span>清空聊天记录</span>
+        </div>
+    </div>
+
+    <!-- 窗口管理器 - 负责窗口相关操作 -->
+    <script src="./chatRoom-window.js"></script>
+    <!-- 聊天室主要业务逻辑 - 负责WebSocket连接和消息处理 -->
+    <script src="./chatRoom-main.js"></script>
+</body>
+
+</html>

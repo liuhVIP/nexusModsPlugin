@@ -468,13 +468,42 @@ document.addEventListener('DOMContentLoaded', () => {
   // 添加打开AI浏览器聊天窗口的功能
   document.getElementById('openAIChatBtn').addEventListener('click', () => {
     chrome.windows.create({
-      url: 'chat.html',
+      url: 'unified-chat.html',
       type: 'popup',
       width: 1250,
       height: 1050,
       focused: true
     });
   });
+
+  // 聊天室按钮事件
+  const openChatRoomBtn = document.getElementById('openChatRoomBtn');
+  if (openChatRoomBtn) {
+    openChatRoomBtn.addEventListener('click', () => {
+      // 获取当前活动标签页
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs[0] && tabs[0].url.includes('nexusmods.com')) {
+          // 向当前标签页发送打开聊天室的消息
+          chrome.tabs.sendMessage(tabs[0].id, { action: 'openChatRoom' }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.error('发送聊天室消息失败:', chrome.runtime.lastError.message);
+              // 如果当前页面没有聊天室功能，提示用户
+              alert('聊天室功能正在初始化中，请稍后再试或刷新页面');
+            } else if (response && response.success) {
+              // 成功打开聊天室，关闭popup
+              window.close();
+            } else {
+              // 响应失败
+              const errorMsg = response && response.error ? response.error : '聊天室功能暂时不可用';
+              alert(errorMsg);
+            }
+          });
+        } else {
+          alert('聊天室功能已移至页面右下角的聊天图标 💬，请在Nexus Mods页面点击该图标打开聊天室');
+        }
+      });
+    });
+  }
 
   // 监听来自chat-window.js的消息
   chrome.runtime.onMessage.addListener((request, sender) => {

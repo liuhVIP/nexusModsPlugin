@@ -19,8 +19,8 @@ let urlSettings = {
 
 // 添加AI分析模组相关的常量
 const AI_ANALYZER = {
-    CHAT_WINDOW_URL: chrome.runtime.getURL('chat.html'),
-    CHAT_WINDOW_ID: 'ai-chat-window'
+    CHAT_WINDOW_URL: chrome.runtime.getURL('unified-chat.html'),
+    CHAT_WINDOW_ID: 'unified-chat-window'
 };
 
 // 跟踪聊天窗口状态
@@ -453,6 +453,40 @@ async function getAllDownloadUrls(modId, gameName, cookies, isGameListPage = fal
 
 // 监听来自 popup 的消息
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  // 处理聊天室窗口打开请求
+  if (request.action === 'openChatRoomWindow') {
+    console.log('收到打开聊天室窗口的请求');
+
+    // 检查是否已经有统一聊天窗口
+    if (chatWindowId) {
+      chrome.windows.get(chatWindowId, (window) => {
+        if (chrome.runtime.lastError) {
+          // 如果窗口不存在，重置chatWindowId并创建新窗口
+          chatWindowId = null;
+          createUnifiedChatWindow('chatroom');
+        } else {
+          // 激活现有窗口并切换到聊天室标签
+          chrome.windows.update(chatWindowId, { focused: true }, () => {
+            chrome.tabs.query({ windowId: chatWindowId }, (tabs) => {
+              if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                  action: 'switchToChatroom'
+                });
+              }
+            });
+          });
+          sendResponse({ success: true, windowId: chatWindowId });
+        }
+      });
+    } else {
+      // 创建新的统一聊天窗口，默认显示聊天室
+      createUnifiedChatWindow('chatroom');
+      sendResponse({ success: true, windowId: null }); // 窗口ID将在创建后设置
+    }
+
+    return true; // 表示异步响应
+  }
+
   if (request.action === "checkLogin") {
     checkNexusLogin().then(isLoggedIn => {
       sendResponse({ isLoggedIn });
@@ -518,15 +552,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return true;
     }
 
-    // 如果已经有聊天窗口，直接激活它
+    // 如果已经有统一聊天窗口，直接激活它
     if (chatWindowId) {
       chrome.windows.get(chatWindowId, (window) => {
         if (chrome.runtime.lastError) {
           // 如果窗口不存在，重置chatWindowId并创建新窗口
           chatWindowId = null;
-          createNewChatWindow(request.modData);
+          createUnifiedChatWindow('ai-chat', request.modData);
         } else {
-          // 激活现有窗口
+          // 激活现有窗口并切换到AI聊天标签
           chrome.windows.update(chatWindowId, { focused: true }, () => {
             // 向聊天窗口发送初始化消息
             chrome.tabs.query({ windowId: chatWindowId }, (tabs) => {
@@ -541,8 +575,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         }
       });
     } else {
-      // 创建新窗口
-      createNewChatWindow(request.modData);
+      // 创建新的统一聊天窗口，默认显示AI聊天
+      createUnifiedChatWindow('ai-chat', request.modData);
     }
     sendResponse({ success: true });
     return true; // 保持消息通道开放
@@ -737,16 +771,16 @@ chrome.webRequest.onBeforeRequest.addListener(
   }
 );
 
-// 创建新聊天窗口的函数
-function createNewChatWindow(modData) {
+// 创建新的统一聊天窗口的函数
+function createUnifiedChatWindow(defaultTab = 'ai-chat', modData = null) {
   // 设置创建标志
   isCreatingWindow = true;
 
-  // 先检查是否已经存在聊天窗口
+  // 先检查是否已经存在统一聊天窗口
   chrome.windows.getAll({ populate: true }, (windows) => {
     let existingWindow = null;
 
-    // 查找已存在的聊天窗口
+    // 查找已存在的统一聊天窗口
     for (const window of windows) {
       for (const tab of window.tabs) {
         if (tab.url === AI_ANALYZER.CHAT_WINDOW_URL) {
@@ -761,23 +795,29 @@ function createNewChatWindow(modData) {
       // 如果找到已存在的窗口，激活它
       chatWindowId = existingWindow.id;
       chrome.windows.update(existingWindow.id, { focused: true }, () => {
-        // 向聊天窗口发送初始化消息
+        // 向统一聊天窗口发送消息
         chrome.tabs.query({ windowId: existingWindow.id }, (tabs) => {
           if (tabs[0]) {
-            chrome.tabs.sendMessage(tabs[0].id, {
-              action: 'initAIChat',
-              modData: modData
-            });
+            if (defaultTab === 'ai-chat' && modData) {
+              chrome.tabs.sendMessage(tabs[0].id, {
+                action: 'initAIChat',
+                modData: modData
+              });
+            } else if (defaultTab === 'chatroom') {
+              chrome.tabs.sendMessage(tabs[0].id, {
+                action: 'switchToChatroom'
+              });
+            }
           }
         });
       });
     } else {
-      // 创建新窗口
+      // 创建新的统一聊天窗口
       chrome.windows.create({
         url: AI_ANALYZER.CHAT_WINDOW_URL,
         type: 'popup',
         width: 1250,
-        height: 1050,
+        height: 1150,
         focused: true
       }, (window) => {
         chatWindowId = window.id;
@@ -785,10 +825,16 @@ function createNewChatWindow(modData) {
         setTimeout(() => {
           chrome.tabs.query({ windowId: window.id }, (tabs) => {
             if (tabs[0]) {
-              chrome.tabs.sendMessage(tabs[0].id, {
-                action: 'initAIChat',
-                modData: modData
-              });
+              if (defaultTab === 'ai-chat' && modData) {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                  action: 'initAIChat',
+                  modData: modData
+                });
+              } else if (defaultTab === 'chatroom') {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                  action: 'switchToChatroom'
+                });
+              }
             }
           });
         }, 1000); // 等待1秒确保页面加载完成

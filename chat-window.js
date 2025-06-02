@@ -8,8 +8,8 @@ class ChatWindow {
     this.isMinimized = false;
     
     // 设置默认大小
-    this.window.style.height = '1000px';
-    this.window.style.width = '1200px';
+    // this.window.style.height = '1000px';
+    // this.window.style.width = '1200px';
     
     this.init();
   }
@@ -30,8 +30,8 @@ class ChatWindow {
       this.window.style.height = '40px';
       this.minimizeBtn.querySelector('img').src = 'images/maximize.png';
     } else {
-      this.window.style.height = '1000px';
-      this.window.style.width = '1200px';
+      // this.window.style.height = '1000px';
+      // this.window.style.width = '1200px';
       this.minimizeBtn.querySelector('img').src = 'images/minimize.png';
     }
   }
