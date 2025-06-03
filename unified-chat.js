@@ -81,7 +81,7 @@ class UnifiedChatManager {
             const aiChatFrame = document.getElementById('aiChatFrame');
             if (aiChatFrame) {
                 // 使用iframe加载AI聊天页面
-                aiChatFrame.src = chrome.runtime.getURL('chat.html');
+                aiChatFrame.src = chrome.runtime.getURL('aiChat/chat.html');
                 this.aiChatLoaded = true;
                 console.log('✅ AI聊天功能加载完成');
 

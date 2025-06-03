@@ -582,7 +582,7 @@ const messageHandler = {
 
     const avatar = document.createElement('div');
     avatar.className = 'message-avatar';
-    avatar.innerHTML = `<img src="images/${isUser ? 'user' : 'ai'}-avatar.png" alt="${isUser ? '用户' : 'AI'}头像">`;
+    avatar.innerHTML = `<img src="../images/${isUser ? 'user' : 'ai'}-avatar.png" alt="${isUser ? '用户' : 'AI'}头像">`;
 
     // 创建一个新的容器来包含消息内容和模组数据区域
     const messageBody = document.createElement('div');
@@ -621,7 +621,7 @@ const messageHandler = {
       const markdownCopyBtn = document.createElement('button');
       markdownCopyBtn.className = 'markdown-copy-btn';
       markdownCopyBtn.title = '复制 Markdown 内容';
-      markdownCopyBtn.innerHTML = '<img src="images/copy.png" alt="复制">';
+      markdownCopyBtn.innerHTML = '<img src="../images/copy.png" alt="复制">';
       markdownCopyBtn.addEventListener('click', () => {
         navigator.clipboard.writeText(content);
         showCopyToast();
@@ -789,7 +789,7 @@ const messageHandler = {
     typingDiv.id = 'typingIndicator';
     typingDiv.innerHTML = `
       <div class="message-avatar">
-        <img src="images/ai-avatar.png" alt="AI头像">
+        <img src="../images/ai-avatar.png" alt="AI头像">
       </div>
       <div class="message-content">
         <div class="typing-indicator">
@@ -825,7 +825,7 @@ const messageHandler = {
 
       const avatar = document.createElement('div');
       avatar.className = 'message-avatar';
-      avatar.innerHTML = `<img src="images/ai-avatar.png" alt="AI头像">`;
+      avatar.innerHTML = `<img src="../images/ai-avatar.png" alt="AI头像">`;
 
       const contentDiv = document.createElement('div');
       contentDiv.className = 'message-content';
@@ -834,7 +834,7 @@ const messageHandler = {
       actions.className = 'message-actions';
       actions.innerHTML = `
         <button class="message-action-btn copy-btn" title="复制">
-          <img src="images/copy.png" alt="复制">
+          <img src="../images/copy.png" alt="复制">
         </button>
       `;
       contentDiv.appendChild(actions);
@@ -936,7 +936,7 @@ const messageHandler = {
           if (!pre.querySelector('.code-copy-btn')) {
             const copyBtn = document.createElement('button');
             copyBtn.className = 'code-copy-btn';
-            copyBtn.innerHTML = '<img src="images/copy.png" alt="复制">';
+            copyBtn.innerHTML = '<img src="../images/copy.png" alt="复制">';
             copyBtn.title = '复制代码';
 
             copyBtn.addEventListener('click', async () => {
@@ -1174,13 +1174,13 @@ const historyHandler = {
       }
 
       historyItem.innerHTML = `
-        <img src="images/chat.png" alt="聊天" class="history-item-icon">
+        <img src="../images/chat.png" alt="聊天" class="history-item-icon">
         <div class="history-item-content">
           <div class="history-item-title">${chat.title}</div>
           <div class="history-item-time">${utils.formatDate(chat.lastUpdate)}</div>
         </div>
         <button class="history-delete-btn" title="删除">
-          <img src="images/delete.png" alt="删除">
+          <img src="../images/delete.png" alt="删除">
         </button>
       `;
 
@@ -1302,7 +1302,7 @@ function initializeEventListeners() {
       }
 
       // 恢复发送按钮
-      elements.sendButton.innerHTML = '<img src="images/send.png" alt="发送">';
+      elements.sendButton.innerHTML = '<img src="../images/send.png" alt="发送">';
       elements.sendButton.disabled = true;
       // 启用历史记录
       enableHistoryItems();
@@ -1853,7 +1853,7 @@ async function handleSendMessage() {
     state.stopRequested = false;
 
     // 更改发送按钮为停止按钮
-    elements.sendButton.innerHTML = '<img src="images/stop.png" alt="停止">';
+    elements.sendButton.innerHTML = '<img src="../images/stop.png" alt="停止">';
     elements.sendButton.disabled = false;
 
     // 禁用历史记录项
@@ -1887,7 +1887,7 @@ async function handleSendMessage() {
         messageHandler.addMessage('抱歉，发生了错误，请稍后重试。', false);
     } finally {
         // 恢复发送按钮
-        elements.sendButton.innerHTML = '<img src="images/send.png" alt="发送">';
+        elements.sendButton.innerHTML = '<img src="../images/send.png" alt="发送">';
         elements.sendButton.disabled = true;
         state.isGenerating = false;
         // 启用历史记录

@@ -60,12 +60,10 @@
       "resources": [
         "images/*",
         "static/*",
-        "chat.html",
-        "chat.js",
         "unified-chat.html",
         "unified-chat.js",
-        "ai-mod-analyzer.js",
-        "chatroom/*"
+        "chatroom/*",
+        "aiChat/*"
       ],
       "matches": ["https://www.nexusmods.com/*"]
     }

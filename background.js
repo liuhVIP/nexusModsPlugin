@@ -528,7 +528,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // 注入 AI 分析器脚本
     chrome.scripting.executeScript({
       target: { tabId: sender.tab.id },
-      files: ['ai-mod-analyzer.js']
+      files: ['aiChat/ai-mod-analyzer.js']
     }).then(() => {
       // console.log('AI分析器脚本注入成功');
       // 通知 content script 脚本已注入
