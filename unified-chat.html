@@ -63,6 +63,26 @@
       border-bottom-color: #007bff;
     }
 
+    /* 标签图标样式 */
+    .tab-button img {
+      width: 25px;
+      height: 25px;
+      margin-right: 6px;
+      vertical-align: middle;
+      object-fit: contain;
+      transition: all 0.3s ease;
+      opacity: 0.7;
+    }
+
+    .tab-button:hover img {
+      opacity: 0.9;
+      transform: scale(1.1);
+    }
+
+    .tab-button.active img {
+      opacity: 1;
+    }
+
     /* 内容区域 */
     .tab-content {
       flex: 1;
@@ -456,10 +476,12 @@
     <!-- 标签栏 -->
     <div class="tab-bar">
       <button class="tab-button active" data-tab="ai-chat">
-        <span>🤖 AI助手</span>
+        <img src="images/ai-avatar.png" alt="AI助手">
+        <span>AI助手</span>
       </button>
       <button class="tab-button" data-tab="chatroom">
-        <span>💬 聊天室</span>
+        <img src="images/chatRoom.png" alt="聊天室">
+        <span>聊天室</span>
       </button>
     </div>
 

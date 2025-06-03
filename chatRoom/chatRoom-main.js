@@ -1437,7 +1437,7 @@ function setupImageUploadButton() {
     // 创建图片上传按钮
     const uploadBtn = document.createElement('button');
     uploadBtn.className = 'emoji-btn image-upload-btn';
-    uploadBtn.innerHTML = '<img src="../images/图片.png" alt="上传图片" />';
+    uploadBtn.innerHTML = '<img src="../images/ImageUpload.png" alt="上传图片" />';
     uploadBtn.title = '上传图片';
 
     // 悬停效果已在CSS中定义，无需额外JavaScript

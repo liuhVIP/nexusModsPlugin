@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Nexus Mods 直链工具",
-  "version": "1.0",
+  "name": "Nexus Mods 智能助手",
+  "version": "2.0",
   "description": "自动在 Nexus Mods 页面显示模组直链",
   "permissions": [
     "activeTab",
@@ -65,8 +65,7 @@
         "unified-chat.html",
         "unified-chat.js",
         "ai-mod-analyzer.js",
-        "chatroom/*",
-        "chatroom-window.html"
+        "chatroom/*"
       ],
       "matches": ["https://www.nexusmods.com/*"]
     }

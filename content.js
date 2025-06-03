@@ -2961,7 +2961,19 @@ function createChatRoomIcon() {
     // 创建聊天图标按钮
     const chatIconBtn = document.createElement('button');
     chatIconBtn.className = 'nexus-chatroom-icon-btn';
-    chatIconBtn.innerHTML = '💬';
+
+    // 创建图标图片元素
+    const iconImg = document.createElement('img');
+    iconImg.src = chrome.runtime.getURL('images/chatRoom.png');
+    iconImg.alt = '聊天室';
+    iconImg.style.cssText = `
+        width: 36px;
+        height: 36px;
+        object-fit: contain;
+        transition: all 0.3s ease;
+    `;
+
+    chatIconBtn.appendChild(iconImg);
     chatIconBtn.title = '打开聊天室';
     chatIconBtn.style.cssText = `
         position: fixed;
@@ -2975,7 +2987,6 @@ function createChatRoomIcon() {
         display: flex;
         justify-content: center;
         align-items: center;
-        font-size: 28px;
         cursor: pointer;
         box-shadow: 0 4px 8px rgba(0,0,0,0.3);
         z-index: 999998;
@@ -2987,11 +2998,21 @@ function createChatRoomIcon() {
     chatIconBtn.addEventListener('mouseenter', function() {
         this.style.backgroundColor = '#677bc4';
         this.style.transform = 'scale(1.1)';
+        // 图标悬停效果
+        const img = this.querySelector('img');
+        if (img) {
+            img.style.transform = 'scale(1.1)';
+        }
     });
 
     chatIconBtn.addEventListener('mouseleave', function() {
         this.style.backgroundColor = '#7289da';
         this.style.transform = 'scale(1)';
+        // 恢复图标大小
+        const img = this.querySelector('img');
+        if (img) {
+            img.style.transform = 'scale(1)';
+        }
     });
 
     // 点击事件：发送消息给background script打开新窗口
