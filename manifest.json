@@ -3,6 +3,8 @@
   "name": "Nexus Mods 智能助手",
   "version": "2.0",
   "description": "自动在 Nexus Mods 页面显示模组直链",
+  "author": "改洺_ (B站UP主改洺_)",
+  "homepage_url": "https://space.bilibili.com/改洺_",
   "permissions": [
     "activeTab",
     "scripting",

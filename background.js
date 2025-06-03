@@ -1,14 +1,48 @@
+/*
+ * Copyright 2024 改洺_ (B站UP主改洺_)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 // 常量定义
 const API_URL = "https://www.nexusmods.com/Core/Libs/Common/Managers/Downloads?GenerateDownloadUrl";
 const NEXUS_BASE_URL = "https://www.nexusmods.com";
 const REQUEST_TIMEOUT = 10000; // 请求超时时间 10秒
+
+// 后台版本校验相关常量
+const VERSION_CHECK = {
+  API_BASE_URL: 'http://117.72.89.99:7003/api/sys-config/by-apply', // 后台版本校验接口基础URL
+  APPLY_ID: 'N网智能助手', // 应用标识
+  CHECK_INTERVAL: 30 * 60 * 1000, // 30分钟检查一次版本
+  CACHE_EXPIRATION: 10 * 60 * 1000, // 版本信息缓存10分钟
+  CURRENT_VERSION: 'v2.0' // 当前插件版本，从manifest.json获取
+};
 
 // URL监听设置的本地存储键名
 const STORAGE_KEYS = {
   STANDARD_URL_ENABLED: 'standardUrlEnabled',
   GAME_LIST_URL_ENABLED: 'gameListUrlEnabled',
   REQUEST_DELAY: 'requestDelay',
-  FILE_REQUEST_DELAY: 'fileRequestDelay'
+  FILE_REQUEST_DELAY: 'fileRequestDelay',
+  // 自动投票和评分相关设置
+  AUTO_VOTE_ENABLED: 'autoVoteEnabled',
+  AUTO_ENDORSE_ENABLED: 'autoEndorseEnabled',
+  VOTE_SUCCESS_COUNT: 'voteSuccessCount',
+  ENDORSE_SUCCESS_COUNT: 'endorseSuccessCount',
+  // 版本校验相关设置
+  VERSION_CHECK_CACHE: 'versionCheckCache',
+  VERSION_CHECK_LAST_TIME: 'versionCheckLastTime',
+  VERSION_MISMATCH_NOTIFIED: 'versionMismatchNotified'
 };
 
 // URL监听设置默认值
@@ -41,6 +75,275 @@ let globalParsingStatus = {
     lastUpdate: Date.now()
 };
 
+// 自动投票和评分相关常量
+const AUTO_VOTE_ENDORSE = {
+    VOTE_API_URL: "https://www.nexusmods.com/Core/Libs/Common/Managers/Mods?VoteMOTM",
+    ENDORSE_API_URL: "https://www.nexusmods.com/Core/Libs/Common/Managers/Mods?Endorse",
+    DELAY_AFTER_DOWNLOAD: 20 * 60 * 1000, // 20分钟延迟
+    PROCESS_INTERVAL: 30 * 1000, // 30秒检查一次队列
+    REQUEST_DELAY: 5 * 1000 // 请求间隔5秒，避免风控
+};
+
+// 自动投票和评分队列
+let autoVoteEndorseQueue = [];
+let isProcessingVoteEndorse = false;
+
+// 自动投票和评分设置
+let autoVoteEndorseSettings = {
+    autoVoteEnabled: false,
+    autoEndorseEnabled: false
+};
+
+// 版本校验相关变量
+let versionCheckTimer = null;
+let lastVersionCheckResult = null;
+
+/**
+ * 获取系统配置信息
+ * @returns {Promise<Object>} 系统配置信息
+ */
+async function fetchSystemConfig() {
+    try {
+        console.log('🔍 开始获取系统配置信息...');
+        // 构建正确的API URL，对中文参数进行编码
+        const encodedApplyId = encodeURIComponent(VERSION_CHECK.APPLY_ID);
+        const apiUrl = `${VERSION_CHECK.API_BASE_URL}/${encodedApplyId}`;
+        console.log('📡 请求URL:', apiUrl);
+        console.log('🏷️ 应用标识:', VERSION_CHECK.APPLY_ID, '-> 编码后:', encodedApplyId);
+
+        const response = await fetchWithTimeout(apiUrl, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }, REQUEST_TIMEOUT);
+
+        if (!response.ok) {
+            throw new Error(`HTTP错误! 状态码: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log('📋 系统配置API响应:', result);
+
+        // 检查API返回状态码
+        if (result.code !== 200) {
+            throw new Error(result.msg || result.message || '获取系统配置失败');
+        }
+
+        return result.data;
+    } catch (error) {
+        console.error('❌ 获取系统配置失败:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * 比较版本号 - 完全一致性检查
+ * @param {string} currentVersion 当前版本
+ * @param {string} serverVersion 服务器版本
+ * @returns {boolean} true: 版本一致, false: 版本不一致
+ */
+function compareVersions(currentVersion, serverVersion) {
+    if (!currentVersion || !serverVersion) {
+        console.log('⚠️ 版本信息不完整:', { currentVersion, serverVersion });
+        return false;
+    }
+
+    // 去除前后空格并进行严格字符串比较
+    const current = currentVersion.trim();
+    const server = serverVersion.trim();
+
+    const isMatch = current === server;
+    console.log('🔍 版本比较:', {
+        current: current,
+        server: server,
+        isMatch: isMatch
+    });
+
+    return isMatch;
+}
+
+/**
+ * 执行版本校验
+ * @param {boolean} forceCheck 是否强制检查（忽略缓存）
+ * @returns {Promise<Object>} 校验结果
+ */
+async function performVersionCheck(forceCheck = false) {
+    try {
+        console.log('🔄 开始执行版本校验...');
+
+        // 检查缓存（如果不是强制检查）
+        if (!forceCheck) {
+            const cachedResult = await getCachedVersionCheckResult();
+            if (cachedResult) {
+                console.log('📦 使用缓存的版本校验结果:', cachedResult);
+                lastVersionCheckResult = cachedResult;
+                return cachedResult;
+            }
+        }
+
+        // 获取系统配置
+        const systemConfig = await fetchSystemConfig();
+
+        // 执行版本比较
+        const currentVersion = VERSION_CHECK.CURRENT_VERSION;
+        const serverVersion = systemConfig.sysVersion;
+        const isVersionMatch = compareVersions(currentVersion, serverVersion);
+
+        const result = {
+            currentVersion,
+            serverVersion,
+            isUpToDate: isVersionMatch,
+            needsUpdate: !isVersionMatch,
+            systemConfig,
+            checkTime: Date.now()
+        };
+
+        console.log('✅ 版本校验完成:', result);
+
+        // 缓存结果
+        await cacheVersionCheckResult(result);
+
+        // 更新全局变量
+        lastVersionCheckResult = result;
+
+        // 更新最后检查时间
+        chrome.storage.local.set({
+            [STORAGE_KEYS.VERSION_CHECK_LAST_TIME]: Date.now()
+        });
+
+        return result;
+    } catch (error) {
+        console.error('❌ 版本校验失败:', error.message);
+        const errorResult = {
+            currentVersion: VERSION_CHECK.CURRENT_VERSION,
+            serverVersion: null,
+            isUpToDate: true, // 网络错误时假设版本正确，避免误报
+            needsUpdate: false,
+            error: error.message,
+            checkTime: Date.now()
+        };
+
+        lastVersionCheckResult = errorResult;
+        return errorResult;
+    }
+}
+
+/**
+ * 获取缓存的版本校验结果
+ * @returns {Promise<Object|null>} 缓存的结果或null
+ */
+async function getCachedVersionCheckResult() {
+    return new Promise((resolve) => {
+        chrome.storage.local.get([STORAGE_KEYS.VERSION_CHECK_CACHE], (result) => {
+            if (result[STORAGE_KEYS.VERSION_CHECK_CACHE]) {
+                const cached = result[STORAGE_KEYS.VERSION_CHECK_CACHE];
+                const now = Date.now();
+
+                // 检查缓存是否过期
+                if (now - cached.checkTime < VERSION_CHECK.CACHE_EXPIRATION) {
+                    resolve(cached);
+                } else {
+                    // 缓存已过期，清除它
+                    chrome.storage.local.remove(STORAGE_KEYS.VERSION_CHECK_CACHE);
+                    resolve(null);
+                }
+            } else {
+                resolve(null);
+            }
+        });
+    });
+}
+
+/**
+ * 缓存版本校验结果
+ * @param {Object} result 校验结果
+ * @returns {Promise<void>}
+ */
+async function cacheVersionCheckResult(result) {
+    return new Promise((resolve) => {
+        chrome.storage.local.set({
+            [STORAGE_KEYS.VERSION_CHECK_CACHE]: result
+        }, resolve);
+    });
+}
+
+/**
+ * 启动定期版本校验
+ */
+function startVersionCheckTimer() {
+    // 清除现有定时器
+    if (versionCheckTimer) {
+        clearInterval(versionCheckTimer);
+    }
+
+    console.log('⏰ 启动版本校验定时器，间隔:', VERSION_CHECK.CHECK_INTERVAL / 1000 / 60, '分钟');
+
+    // 立即执行一次版本校验
+    performVersionCheck(false).catch(error => {
+        console.error('初始版本校验失败:', error);
+    });
+
+    // 设置定期校验
+    versionCheckTimer = setInterval(() => {
+        performVersionCheck(false).catch(error => {
+            console.error('定期版本校验失败:', error);
+        });
+    }, VERSION_CHECK.CHECK_INTERVAL);
+}
+
+/**
+ * 停止版本校验定时器
+ */
+function stopVersionCheckTimer() {
+    if (versionCheckTimer) {
+        clearInterval(versionCheckTimer);
+        versionCheckTimer = null;
+        console.log('⏹️ 版本校验定时器已停止');
+    }
+}
+
+/**
+ * 处理版本不匹配的情况
+ * @param {Object} versionResult 版本校验结果
+ */
+async function handleVersionMismatch(versionResult) {
+    if (!versionResult.needsUpdate) {
+        return;
+    }
+
+    console.log('⚠️ 检测到版本不匹配，需要更新');
+
+    // 检查是否已经通知过用户
+    const notified = await new Promise((resolve) => {
+        chrome.storage.local.get([STORAGE_KEYS.VERSION_MISMATCH_NOTIFIED], (result) => {
+            resolve(result[STORAGE_KEYS.VERSION_MISMATCH_NOTIFIED] || false);
+        });
+    });
+
+    if (!notified) {
+        // 标记已通知
+        chrome.storage.local.set({
+            [STORAGE_KEYS.VERSION_MISMATCH_NOTIFIED]: true
+        });
+
+        // 向所有Nexus Mods标签页发送版本更新通知
+        chrome.tabs.query({ url: "https://www.nexusmods.com/*" }, (tabs) => {
+            tabs.forEach(tab => {
+                chrome.tabs.sendMessage(tab.id, {
+                    action: 'versionUpdateNotification',
+                    versionResult: versionResult
+                }, (response) => {
+                    // 忽略错误，因为有些标签页可能没有content script
+                    if (chrome.runtime.lastError) {
+                        console.log(`向标签页 ${tab.id} 发送版本更新通知失败:`, chrome.runtime.lastError.message);
+                    }
+                });
+            });
+        });
+    }
+}
+
 // 设置全局解析状态
 function setGlobalParsingStatus(isParsingEnabled) {
     globalParsingStatus = {
@@ -48,6 +351,464 @@ function setGlobalParsingStatus(isParsingEnabled) {
         lastUpdate: Date.now()
     };
     console.log(`设置全局解析状态: ${isParsingEnabled ? '启用' : '暂停'}`);
+}
+
+// 从直链URL中解析game_id和mod_id
+function parseDirectLinkUrl(url) {
+    try {
+        // 示例URL: https://supporter-files.nexus-cdn.com/3333/21857/Trigger Mode Control_2.7.4_RU-21857-2-7-4-1748800009.zip
+        const urlObj = new URL(url);
+        const pathParts = urlObj.pathname.split('/').filter(Boolean);
+
+        if (pathParts.length >= 2) {
+            const gameId = pathParts[0];
+            const modId = pathParts[1];
+
+            // 验证是否为数字
+            if (/^\d+$/.test(gameId) && /^\d+$/.test(modId)) {
+                return { gameId, modId };
+            }
+        }
+
+        return null;
+    } catch (error) {
+        console.error('解析直链URL失败:', error);
+        return null;
+    }
+}
+
+// 添加模组到自动投票评分队列
+function addToAutoVoteEndorseQueue(gameId, modId, downloadUrls) {
+    // 检查设置是否启用
+    if (!autoVoteEndorseSettings.autoVoteEnabled && !autoVoteEndorseSettings.autoEndorseEnabled) {
+        return;
+    }
+
+    const modKey = `${gameId}_${modId}`;
+    const currentTime = Date.now();
+
+    // 检查是否已经在队列中
+    const existingIndex = autoVoteEndorseQueue.findIndex(item =>
+        item.gameId === gameId && item.modId === modId
+    );
+
+    if (existingIndex !== -1) {
+        const existingItem = autoVoteEndorseQueue[existingIndex];
+
+        // 如果已经处理过，不再重复添加
+        if (existingItem.processed) {
+            console.log(`模组 ${gameId}/${modId} 已经处理过投票评分，跳过`);
+            return;
+        }
+
+        // 如果还在队列中但未处理，更新下载链接但保持原有的首次获取时间
+        existingItem.downloadUrls = downloadUrls;
+        existingItem.lastUpdateTime = currentTime;
+        console.log(`模组 ${gameId}/${modId} 已在队列中，更新下载链接，保持原有的首次获取时间: ${new Date(existingItem.firstObtainTime).toLocaleString()}`);
+
+        // 保存更新后的队列
+        saveAutoVoteEndorseQueue();
+        return;
+    }
+
+    // 检查是否已经记录了首次获取时间
+    chrome.storage.local.get([`firstObtainTime_${modKey}`], (result) => {
+        const firstObtainTimeKey = `firstObtainTime_${modKey}`;
+        let firstObtainTime = result[firstObtainTimeKey];
+
+        // 如果没有记录首次获取时间，则记录当前时间
+        if (!firstObtainTime) {
+            firstObtainTime = currentTime;
+            chrome.storage.local.set({ [firstObtainTimeKey]: firstObtainTime });
+            console.log(`记录模组 ${gameId}/${modId} 的首次获取时间: ${new Date(firstObtainTime).toLocaleString()}`);
+        } else {
+            console.log(`模组 ${gameId}/${modId} 的首次获取时间: ${new Date(firstObtainTime).toLocaleString()}`);
+        }
+
+        // 计算处理时间（基于首次获取时间）
+        const processTime = firstObtainTime + AUTO_VOTE_ENDORSE.DELAY_AFTER_DOWNLOAD;
+        const timeUntilProcess = processTime - currentTime;
+
+        // 添加到队列
+        const queueItem = {
+            gameId,
+            modId,
+            downloadUrls,
+            firstObtainTime,        // 首次获取直链的时间
+            addedTime: currentTime, // 添加到队列的时间
+            lastUpdateTime: currentTime, // 最后更新时间
+            processTime,            // 处理时间（基于首次获取时间）
+            processed: false
+        };
+
+        autoVoteEndorseQueue.push(queueItem);
+
+        if (timeUntilProcess > 0) {
+            const minutesLeft = Math.ceil(timeUntilProcess / (60 * 1000));
+            console.log(`模组 ${gameId}/${modId} 已添加到自动投票评分队列，还需等待 ${minutesLeft} 分钟后处理`);
+        } else {
+            console.log(`模组 ${gameId}/${modId} 已添加到自动投票评分队列，已满足20分钟条件，将立即处理`);
+        }
+
+        // 保存队列到本地存储
+        saveAutoVoteEndorseQueue();
+
+        // 启动队列处理器（如果还没启动）
+        if (!isProcessingVoteEndorse) {
+            startAutoVoteEndorseProcessor();
+        }
+    });
+}
+
+// 保存自动投票评分队列到本地存储
+function saveAutoVoteEndorseQueue() {
+    chrome.storage.local.set({
+        'autoVoteEndorseQueue': JSON.stringify(autoVoteEndorseQueue)
+    });
+}
+
+// 从本地存储恢复自动投票评分队列
+function restoreAutoVoteEndorseQueue() {
+    chrome.storage.local.get(['autoVoteEndorseQueue'], (result) => {
+        if (result.autoVoteEndorseQueue) {
+            try {
+                autoVoteEndorseQueue = JSON.parse(result.autoVoteEndorseQueue);
+                console.log(`恢复自动投票评分队列，共 ${autoVoteEndorseQueue.length} 个项目`);
+
+                // 启动队列处理器
+                if (autoVoteEndorseQueue.length > 0 && !isProcessingVoteEndorse) {
+                    startAutoVoteEndorseProcessor();
+                }
+            } catch (error) {
+                console.error('恢复自动投票评分队列失败:', error);
+                autoVoteEndorseQueue = [];
+            }
+        }
+    });
+}
+
+// 启动自动投票评分队列处理器
+function startAutoVoteEndorseProcessor() {
+    if (isProcessingVoteEndorse) {
+        return;
+    }
+
+    isProcessingVoteEndorse = true;
+    console.log('启动自动投票评分队列处理器');
+
+    const processQueue = async () => {
+        try {
+            const now = Date.now();
+
+            // 查找需要处理的项目（基于首次获取时间）
+            const readyItems = autoVoteEndorseQueue.filter(item => {
+                if (item.processed) return false;
+
+                // 基于首次获取时间计算是否已经满足20分钟条件
+                const timeSinceFirstObtain = now - item.firstObtainTime;
+                const isReady = timeSinceFirstObtain >= AUTO_VOTE_ENDORSE.DELAY_AFTER_DOWNLOAD;
+
+                if (isReady) {
+                    const minutesSinceFirstObtain = Math.floor(timeSinceFirstObtain / (60 * 1000));
+                    console.log(`模组 ${item.gameId}/${item.modId} 已满足条件，首次获取时间: ${new Date(item.firstObtainTime).toLocaleString()}，已过去 ${minutesSinceFirstObtain} 分钟`);
+                }
+
+                return isReady;
+            });
+
+            if (readyItems.length > 0) {
+                console.log(`找到 ${readyItems.length} 个待处理的自动投票评分项目`);
+
+                for (const item of readyItems) {
+                    try {
+                        await processAutoVoteEndorse(item);
+                        item.processed = true;
+
+                        // 保存队列状态
+                        saveAutoVoteEndorseQueue();
+
+                        // 请求间隔，避免风控
+                        await new Promise(resolve => setTimeout(resolve, AUTO_VOTE_ENDORSE.REQUEST_DELAY));
+                    } catch (error) {
+                        console.error(`处理自动投票评分失败 (${item.gameId}/${item.modId}):`, error);
+                        item.processed = true; // 标记为已处理，避免重复尝试
+                    }
+                }
+            }
+
+            // 清理已处理的项目（保留最近24小时的记录，基于首次获取时间）
+            const oneDayAgo = now - 24 * 60 * 60 * 1000;
+            const beforeCleanupCount = autoVoteEndorseQueue.length;
+            autoVoteEndorseQueue = autoVoteEndorseQueue.filter(item => {
+                // 保留未处理的项目
+                if (!item.processed) return true;
+
+                // 对于已处理的项目，只保留最近24小时内首次获取的
+                return item.firstObtainTime > oneDayAgo;
+            });
+
+            const afterCleanupCount = autoVoteEndorseQueue.length;
+            if (beforeCleanupCount !== afterCleanupCount) {
+                console.log(`清理队列：删除了 ${beforeCleanupCount - afterCleanupCount} 个过期项目，剩余 ${afterCleanupCount} 个项目`);
+                saveAutoVoteEndorseQueue();
+            }
+
+            // 如果还有未处理的项目，继续处理
+            if (autoVoteEndorseQueue.some(item => !item.processed)) {
+                setTimeout(processQueue, AUTO_VOTE_ENDORSE.PROCESS_INTERVAL);
+            } else {
+                isProcessingVoteEndorse = false;
+                console.log('自动投票评分队列处理完成');
+            }
+        } catch (error) {
+            console.error('自动投票评分队列处理器错误:', error);
+            isProcessingVoteEndorse = false;
+        }
+    };
+
+    processQueue();
+}
+
+// 处理单个模组的自动投票和评分
+async function processAutoVoteEndorse(item) {
+    console.log(`开始处理模组 ${item.gameId}/${item.modId} 的自动投票评分`);
+
+    const cookies = await getNexusCookies();
+    const cookieString = formatCookies(cookies);
+
+    let voteSuccess = false;
+    let endorseSuccess = false;
+
+    // 执行自动投票
+    if (autoVoteEndorseSettings.autoVoteEnabled) {
+        try {
+            const voteResult = await performAutoVote(item.gameId, item.modId, cookieString);
+            if (voteResult.success) {
+                voteSuccess = true;
+                console.log(`模组 ${item.gameId}/${item.modId} 自动投票成功`);
+
+                // 更新投票成功计数
+                await incrementSuccessCount(STORAGE_KEYS.VOTE_SUCCESS_COUNT);
+            } else {
+                console.log(`模组 ${item.gameId}/${item.modId} 自动投票失败:`, voteResult.error);
+            }
+        } catch (error) {
+            console.error(`模组 ${item.gameId}/${item.modId} 自动投票异常:`, error);
+        }
+    }
+
+    // 执行自动评分（如果投票成功或未启用投票）
+    if (autoVoteEndorseSettings.autoEndorseEnabled) {
+        try {
+            const endorseResult = await performAutoEndorse(item.gameId, item.modId, cookieString);
+            if (endorseResult.success) {
+                endorseSuccess = true;
+                console.log(`模组 ${item.gameId}/${item.modId} 自动评分成功`);
+
+                // 更新评分成功计数
+                await incrementSuccessCount(STORAGE_KEYS.ENDORSE_SUCCESS_COUNT);
+            } else {
+                console.log(`模组 ${item.gameId}/${item.modId} 自动评分失败:`, endorseResult.error);
+            }
+        } catch (error) {
+            console.error(`模组 ${item.gameId}/${item.modId} 自动评分异常:`, error);
+        }
+    }
+
+    return { voteSuccess, endorseSuccess };
+}
+
+// 执行自动投票
+async function performAutoVote(gameId, modId, cookies) {
+    try {
+        const data = new URLSearchParams();
+        data.append('game_id', gameId);
+        data.append('mod_id', modId);
+        data.append('positive', '1');
+
+        const response = await fetchWithTimeout(AUTO_VOTE_ENDORSE.VOTE_API_URL, {
+            method: 'POST',
+            headers: {
+                'accept': '*/*',
+                'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+                'cache-control': 'no-cache',
+                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'origin': 'https://www.nexusmods.com',
+                'pragma': 'no-cache',
+                'priority': 'u=1, i',
+                'sec-ch-ua': '"Chromium";v="136", "Microsoft Edge";v="136", "Not.A/Brand";v="99"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-origin',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
+                'x-requested-with': 'XMLHttpRequest',
+                'Cookie': cookies
+            },
+            body: data
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP错误! 状态码: ${response.status}`);
+        }
+
+        const result = await response.text();
+        console.log(`投票API响应:`, result);
+
+        return { success: true, response: result };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+// 执行自动评分
+async function performAutoEndorse(gameId, modId, cookies) {
+    try {
+        const data = new URLSearchParams();
+        data.append('game_id', gameId);
+        data.append('mod_id', modId);
+        data.append('positive', '1');
+
+        const response = await fetchWithTimeout(AUTO_VOTE_ENDORSE.ENDORSE_API_URL, {
+            method: 'POST',
+            headers: {
+                'accept': '*/*',
+                'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+                'cache-control': 'no-cache',
+                'content-type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'origin': 'https://www.nexusmods.com',
+                'pragma': 'no-cache',
+                'priority': 'u=1, i',
+                'sec-ch-ua': '"Chromium";v="136", "Microsoft Edge";v="136", "Not.A/Brand";v="99"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-origin',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0',
+                'x-requested-with': 'XMLHttpRequest',
+                'Cookie': cookies
+            },
+            body: data
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP错误! 状态码: ${response.status}`);
+        }
+
+        const result = await response.text();
+        console.log(`评分API响应:`, result);
+
+        // 检查响应是否包含成功标识
+        try {
+            const jsonResult = JSON.parse(result);
+            if (jsonResult.status === true) {
+                return { success: true, response: jsonResult };
+            } else {
+                return { success: false, error: jsonResult.message || '评分失败' };
+            }
+        } catch (parseError) {
+            // 如果不是JSON格式，检查是否包含成功标识
+            if (result.includes('success') || result.includes('true')) {
+                return { success: true, response: result };
+            } else {
+                return { success: false, error: '评分响应格式异常' };
+            }
+        }
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+}
+
+// 增加成功计数
+async function incrementSuccessCount(storageKey) {
+    return new Promise((resolve) => {
+        chrome.storage.local.get([storageKey], (result) => {
+            const currentCount = result[storageKey] || 0;
+            const newCount = currentCount + 1;
+
+            chrome.storage.local.set({ [storageKey]: newCount }, () => {
+                console.log(`${storageKey} 计数更新为: ${newCount}`);
+                resolve(newCount);
+            });
+        });
+    });
+}
+
+// 加载自动投票评分设置
+function loadAutoVoteEndorseSettings() {
+    chrome.storage.local.get([
+        STORAGE_KEYS.AUTO_VOTE_ENABLED,
+        STORAGE_KEYS.AUTO_ENDORSE_ENABLED
+    ], (result) => {
+        autoVoteEndorseSettings.autoVoteEnabled = result[STORAGE_KEYS.AUTO_VOTE_ENABLED] || false;
+        autoVoteEndorseSettings.autoEndorseEnabled = result[STORAGE_KEYS.AUTO_ENDORSE_ENABLED] || false;
+
+        console.log('自动投票评分设置已加载:', autoVoteEndorseSettings);
+    });
+}
+
+// 清理过期的首次获取时间记录
+function cleanupExpiredFirstObtainTimes() {
+    chrome.storage.local.get(null, (allData) => {
+        const now = Date.now();
+        const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000; // 7天前
+        const keysToRemove = [];
+
+        // 查找所有首次获取时间的键
+        Object.keys(allData).forEach(key => {
+            if (key.startsWith('firstObtainTime_')) {
+                const timestamp = allData[key];
+                if (timestamp < sevenDaysAgo) {
+                    keysToRemove.push(key);
+                }
+            }
+        });
+
+        // 删除过期的记录
+        if (keysToRemove.length > 0) {
+            chrome.storage.local.remove(keysToRemove, () => {
+                console.log(`清理了 ${keysToRemove.length} 个过期的首次获取时间记录`);
+            });
+        }
+    });
+}
+
+// 获取队列详细信息（用于统计显示）
+function getQueueDetailedInfo() {
+    const now = Date.now();
+    const queueInfo = {
+        total: autoVoteEndorseQueue.length,
+        processed: 0,
+        ready: 0,
+        waiting: 0,
+        waitingItems: []
+    };
+
+    autoVoteEndorseQueue.forEach(item => {
+        if (item.processed) {
+            queueInfo.processed++;
+        } else {
+            const timeSinceFirstObtain = now - item.firstObtainTime;
+            const isReady = timeSinceFirstObtain >= AUTO_VOTE_ENDORSE.DELAY_AFTER_DOWNLOAD;
+
+            if (isReady) {
+                queueInfo.ready++;
+            } else {
+                queueInfo.waiting++;
+                const timeLeft = AUTO_VOTE_ENDORSE.DELAY_AFTER_DOWNLOAD - timeSinceFirstObtain;
+                const minutesLeft = Math.ceil(timeLeft / (60 * 1000));
+                queueInfo.waitingItems.push({
+                    gameId: item.gameId,
+                    modId: item.modId,
+                    minutesLeft: minutesLeft
+                });
+            }
+        }
+    });
+
+    return queueInfo;
 }
 
 // 获取全局解析状态
@@ -332,6 +1093,13 @@ function loadUrlSettings() {
 
 // 初始化时加载设置
 loadUrlSettings();
+loadAutoVoteEndorseSettings();
+restoreAutoVoteEndorseQueue();
+cleanupExpiredFirstObtainTimes();
+
+// 启动版本校验
+console.log('🚀 启动版本校验系统...');
+startVersionCheckTimer();
 
 // 监听存储变化
 chrome.storage.onChanged.addListener((changes, namespace) => {
@@ -441,6 +1209,24 @@ async function getAllDownloadUrls(modId, gameName, cookies, isGameListPage = fal
                 }
             } catch (error) {
                 console.error(`处理文件 ${fileId} 时发生错误:`, error);
+            }
+        }
+
+        // 如果成功获取到下载链接，尝试添加到自动投票评分队列
+        if (downloadUrls.length > 0) {
+            try {
+                // 从第一个下载链接中解析game_id和mod_id
+                const firstUrl = downloadUrls[0].url;
+                const parsedIds = parseDirectLinkUrl(firstUrl);
+
+                if (parsedIds) {
+                    console.log(`从直链解析到 game_id: ${parsedIds.gameId}, mod_id: ${parsedIds.modId}`);
+                    addToAutoVoteEndorseQueue(parsedIds.gameId, parsedIds.modId, downloadUrls);
+                } else {
+                    console.log('无法从直链中解析game_id和mod_id');
+                }
+            } catch (error) {
+                console.error('处理自动投票评分时发生错误:', error);
             }
         }
 
@@ -630,6 +1416,89 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }));
     console.log('添加标签页ID和页面URL后的模组列表:', modsWithTabId);
     addModsToQueueAndProcess(modsWithTabId);
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // 处理自动投票评分设置更新
+  if (request.action === "updateAutoVoteEndorseSettings") {
+    autoVoteEndorseSettings.autoVoteEnabled = request.autoVoteEnabled;
+    autoVoteEndorseSettings.autoEndorseEnabled = request.autoEndorseEnabled;
+
+    // 保存到本地存储
+    chrome.storage.local.set({
+      [STORAGE_KEYS.AUTO_VOTE_ENABLED]: request.autoVoteEnabled,
+      [STORAGE_KEYS.AUTO_ENDORSE_ENABLED]: request.autoEndorseEnabled
+    });
+
+    console.log('自动投票评分设置已更新:', autoVoteEndorseSettings);
+    sendResponse({ success: true });
+    return true;
+  }
+
+  // 处理获取自动投票评分统计
+  if (request.action === "getAutoVoteEndorseStats") {
+    chrome.storage.local.get([
+      STORAGE_KEYS.VOTE_SUCCESS_COUNT,
+      STORAGE_KEYS.ENDORSE_SUCCESS_COUNT
+    ], (result) => {
+      const queueInfo = getQueueDetailedInfo();
+      sendResponse({
+        voteSuccessCount: result[STORAGE_KEYS.VOTE_SUCCESS_COUNT] || 0,
+        endorseSuccessCount: result[STORAGE_KEYS.ENDORSE_SUCCESS_COUNT] || 0,
+        queueLength: queueInfo.waiting, // 只显示等待中的数量
+        queueReady: queueInfo.ready,    // 准备处理的数量
+        queueTotal: queueInfo.total,    // 总数量
+        queueProcessed: queueInfo.processed, // 已处理数量
+        waitingItems: queueInfo.waitingItems.slice(0, 5) // 最多显示5个等待项目的详情
+      });
+    });
+    return true;
+  }
+
+  // 处理版本校验请求
+  if (request.action === "checkVersion") {
+    console.log('📨 收到版本校验请求:', request);
+    const forceCheck = request.forceCheck || false;
+    performVersionCheck(forceCheck)
+      .then(result => {
+        console.log('✅ 版本校验完成，发送响应:', result);
+        // 处理版本不匹配情况
+        handleVersionMismatch(result);
+        sendResponse({ success: true, versionResult: result });
+      })
+      .catch(error => {
+        console.error('❌ 版本校验失败，发送错误响应:', error);
+        sendResponse({ success: false, error: error.message });
+      });
+    return true;
+  }
+
+  // 处理获取版本状态请求
+  if (request.action === "getVersionStatus") {
+    console.log('📨 收到获取版本状态请求');
+    if (lastVersionCheckResult) {
+      console.log('📦 返回缓存的版本状态:', lastVersionCheckResult);
+      sendResponse({ success: true, versionResult: lastVersionCheckResult });
+    } else {
+      console.log('🔍 没有缓存结果，执行新的版本检查');
+      // 如果没有缓存结果，执行一次检查
+      performVersionCheck(false)
+        .then(result => {
+          console.log('✅ 新版本检查完成，发送响应:', result);
+          sendResponse({ success: true, versionResult: result });
+        })
+        .catch(error => {
+          console.error('❌ 新版本检查失败，发送错误响应:', error);
+          sendResponse({ success: false, error: error.message });
+        });
+    }
+    return true;
+  }
+
+  // 处理重置版本通知状态
+  if (request.action === "resetVersionNotification") {
+    chrome.storage.local.remove(STORAGE_KEYS.VERSION_MISMATCH_NOTIFIED);
     sendResponse({ success: true });
     return true;
   }

@@ -6,7 +6,7 @@
 
 // 聊天室配置
 const CHAT_CONFIG = {
-    roomId: 'kingdomcomedeliverance2',
+    roomId: 'MonsterHunterWilds',
     serverUrl: 'http://117.72.89.99:7003',  // 使用本地开发服务器
     wsEndpoint: 'http://117.72.89.99:7003/ws',
     reconnectDelay: 3000,
@@ -21,7 +21,12 @@ const chatState = {
     reconnectTimer: null,
     reconnectAttempts: 0,
     isConnected: false,
-    isConnecting: false
+    isConnecting: false,
+    // 分页状态管理
+    currentPage: 1,
+    pageSize: 15,
+    hasMore: true,
+    isLoading: false
 };
 
 // 页面加载完成后初始化
@@ -119,7 +124,10 @@ async function initializeUserInfo() {
     
     // 更新UI显示
     updateUsernameDisplay();
-    
+
+    // 初始化用户计数显示
+    updateUserCount(0);
+
     console.log('✅ 用户信息初始化完成:', { username: savedUsername, userId: savedUserId });
 }
 
@@ -316,7 +324,13 @@ function bindChatEvents() {
     // 添加用户列表收起/展开功能
     setupUserListToggle();
 
-    console.log('✅ 事件绑定完成（包含图片上传功能、表情面板和用户列表收起功能）');
+    // 绑定用户名修改相关事件
+    setupUsernameModalEvents();
+
+    // 绑定系统消息模态框事件
+    setupMessageModalEvents();
+
+    console.log('✅ 事件绑定完成（包含图片上传功能、表情面板、用户列表收起功能和模态框事件）');
 }
 
 /**
@@ -589,34 +603,30 @@ function sendMessage() {
 }
 
 /**
- * 修改用户名
+ * 修改用户名 - 显示用户名修改模态框
  */
 function changeUsername() {
-    const newUsername = prompt('请输入新的用户名:', chatState.username || '');
+    const usernameModal = document.getElementById('username-modal');
+    const newUsernameInput = document.getElementById('new-username');
 
-    if (!newUsername || !newUsername.trim()) {
-        console.log('⚠️ 用户名为空，取消修改');
+    if (!usernameModal || !newUsernameInput) {
+        console.error('❌ 用户名修改模态框元素未找到');
         return;
     }
 
-    const trimmedUsername = newUsername.trim();
-    if (trimmedUsername === chatState.username) {
-        console.log('⚠️ 用户名未改变');
-        return;
-    }
+    // 设置当前用户名作为默认值
+    newUsernameInput.value = chatState.username || '';
 
-    // 更新本地状态
-    chatState.username = trimmedUsername;
-    localStorage.setItem('chatUsername', trimmedUsername);
-    updateUsernameDisplay();
+    // 显示模态框
+    usernameModal.style.display = 'flex';
 
-    console.log('✅ 用户名已更新为:', trimmedUsername);
-    showSystemMessage('用户名已更新为: ' + trimmedUsername);
+    // 聚焦到输入框
+    setTimeout(() => {
+        newUsernameInput.focus();
+        newUsernameInput.select();
+    }, 100);
 
-    // 如果已连接，重新加入聊天室
-    if (chatState.isConnected) {
-        joinChatRoom();
-    }
+    console.log('📝 用户名修改模态框已显示');
 }
 
 /**
@@ -658,7 +668,7 @@ function onBroadcastReceived(payload) {
 
             const messageContent = document.createElement('div');
             messageContent.className = 'message';
-            messageContent.innerHTML = `<i class="fas fa-broadcast-tower"></i> ${message.message}`;
+            messageContent.innerHTML = `<span class="broadcast-icon">📢</span> ${message.message}`;
 
             messageDiv.appendChild(messageContent);
             messagesContainer.appendChild(messageDiv);
@@ -693,13 +703,17 @@ async function joinChatRoom() {
     try {
         console.log('🚪 正在加入聊天室...');
 
-        const response = await fetch(`${CHAT_CONFIG.serverUrl}/api/chat/room/${CHAT_CONFIG.roomId}/join?username=${encodeURIComponent(chatState.username)}&userId=${chatState.userId}`, {
-            method: 'POST'
+        // 根据API文档，只需要传递 roomId 和 username 参数
+        const response = await fetch(`${CHAT_CONFIG.serverUrl}/api/chat/room/${CHAT_CONFIG.roomId}/join?username=${encodeURIComponent(chatState.username)}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
         });
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.message || '加入聊天室失败');
+            throw new Error(errorData.msg || errorData.message || '加入聊天室失败');
         }
 
         const result = await response.json();
@@ -711,14 +725,18 @@ async function joinChatRoom() {
             loadChatHistory();
         } else if (result.code === 409) {
             // 用户名冲突，使用建议的用户名
-            console.log('⚠️ 用户名冲突，使用建议用户名:', result.data.suggestedName);
-            chatState.username = result.data.suggestedName;
-            localStorage.setItem('chatUsername', chatState.username);
-            updateUsernameDisplay();
-            // 重新尝试加入
-            joinChatRoom();
+            console.log('⚠️ 用户名冲突，使用建议用户名:', result.data?.suggestedName);
+            if (result.data?.suggestedName) {
+                chatState.username = result.data.suggestedName;
+                localStorage.setItem('chatUsername', chatState.username);
+                updateUsernameDisplay();
+                // 重新尝试加入
+                joinChatRoom();
+            } else {
+                throw new Error('用户名冲突但未提供建议用户名');
+            }
         } else {
-            throw new Error(result.message || '加入聊天室失败');
+            throw new Error(result.msg || result.message || '加入聊天室失败');
         }
 
     } catch (error) {
@@ -732,40 +750,119 @@ async function joinChatRoom() {
  */
 async function updateUserList() {
     try {
+        console.log('🔄 开始更新用户列表...');
         const response = await fetch(`${CHAT_CONFIG.serverUrl}/api/chat/room/${CHAT_CONFIG.roomId}/users`);
         const result = await response.json();
 
-        if (result.code === 200) {
-            const userListElement = document.getElementById('userList');
-            if (userListElement) {
-                userListElement.innerHTML = '';
+        console.log('🔍 用户列表API响应:', result);
 
-                result.data.forEach(username => {
+        if (result.code === 200 && Array.isArray(result.data)) {
+            const userListElement = document.getElementById('userList');
+            console.log('🔍 用户列表元素:', userListElement);
+
+            if (userListElement) {
+                // 清空现有列表
+                userListElement.innerHTML = '';
+                console.log('🧹 已清空用户列表');
+
+                // 添加每个用户
+                result.data.forEach((username, index) => {
+                    console.log(`👤 添加用户 ${index + 1}:`, username);
+
                     const userItem = document.createElement('li');
+                    userItem.className = 'user-item';
                     userItem.textContent = username;
 
+                    // 标记当前用户
                     if (username === chatState.username) {
                         userItem.textContent += ' (我)';
                         userItem.style.fontWeight = 'bold';
+                        userItem.style.color = '#007bff';
                     }
 
                     userListElement.appendChild(userItem);
+                    console.log(`✅ 用户 "${username}" 已添加到列表`);
                 });
 
-                console.log('✅ 用户列表已更新，在线用户数:', result.data.length);
+                // 更新用户计数显示
+                updateUserCount(result.data.length);
+
+                console.log('✅ 用户列表更新完成，总用户数:', result.data.length);
+                console.log('🔍 最终用户列表HTML:', userListElement.innerHTML);
+            } else {
+                console.error('❌ 未找到用户列表元素 #userList');
+                // 尝试查找可能的替代元素
+                const possibleElements = [
+                    document.querySelector('.user-list'),
+                    document.querySelector('#user-list'),
+                    document.querySelector('.users'),
+                    document.querySelector('#users')
+                ];
+                console.log('🔍 查找可能的用户列表元素:', possibleElements);
             }
+        } else {
+            console.error('❌ 获取用户列表失败');
+            console.error('状态码:', result.code);
+            console.error('数据类型:', typeof result.data);
+            console.error('数据内容:', result.data);
+            console.error('错误信息:', result.msg || result.message);
+
+            // 错误时重置用户计数
+            updateUserCount(0);
         }
     } catch (error) {
-        console.error('❌ 获取用户列表失败:', error);
+        console.error('❌ 获取用户列表异常:', error);
+
+        // 异常时重置用户计数
+        updateUserCount(0);
     }
 }
 
 /**
- * 加载聊天历史
+ * 更新用户计数显示
+ * @param {number} count - 用户数量
  */
-async function loadChatHistory() {
+function updateUserCount(count) {
+    const userCountElement = document.getElementById('userCount');
+    if (userCountElement) {
+        // 更新计数文本
+        userCountElement.textContent = `(${count})`;
+
+        // 添加更新动画效果
+        userCountElement.classList.add('updated');
+
+        // 移除动画效果
+        setTimeout(() => {
+            userCountElement.classList.remove('updated');
+        }, 500);
+
+        console.log('📊 用户计数已更新:', count);
+    } else {
+        console.warn('⚠️ 未找到用户计数元素 #userCount');
+    }
+}
+
+/**
+ * 加载聊天历史（支持分页）
+ * @param {boolean} isInitial - 是否为初始加载
+ */
+async function loadChatHistory(isInitial = true) {
+    // 防止重复加载
+    if (chatState.isLoading) {
+        console.log('⚠️ 正在加载中，跳过重复请求');
+        return;
+    }
+
+    // 如果不是初始加载且没有更多数据，直接返回
+    if (!isInitial && !chatState.hasMore) {
+        console.log('⚠️ 没有更多历史消息了');
+        return;
+    }
+
+    chatState.isLoading = true;
+
     try {
-        console.log('📚 正在加载聊天历史...');
+        console.log(`📚 正在加载聊天历史... 页码: ${chatState.currentPage}, 每页: ${chatState.pageSize}`);
 
         const messagesContainer = document.getElementById('messages');
         if (!messagesContainer) {
@@ -774,16 +871,42 @@ async function loadChatHistory() {
         }
 
         // 显示加载动画
-        messagesContainer.innerHTML = `
-            <div class="loading-message-container">
-                <div class="loading-spinner">
-                    <i class="fas fa-spinner fa-spin"></i>
+        if (isInitial) {
+            // 初始加载：清空容器并显示居中加载动画
+            messagesContainer.innerHTML = `
+                <div class="loading-message-container">
+                    <div class="loading-spinner">
+                        <span class="spinner-icon">⏳</span>
+                    </div>
+                    <div class="loading-text2">加载聊天记录中...</div>
                 </div>
-                <div class="loading-text2">加载聊天记录中...</div>
-            </div>
-        `;
+            `;
+        } else {
+            // 增量加载：在顶部添加加载动画
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'loading-message-container top-loading';
+            loadingDiv.innerHTML = `
+                <div class="loading-spinner">
+                    <span class="spinner-icon">⏳</span>
+                </div>
+                <div class="loading-text2">加载更多历史消息...</div>
+            `;
+            messagesContainer.insertBefore(loadingDiv, messagesContainer.firstChild);
+        }
 
-        const response = await fetch(`${CHAT_CONFIG.serverUrl}/api/chat/history/${CHAT_CONFIG.roomId}`);
+        // 调用分页API
+        const response = await fetch(`${CHAT_CONFIG.serverUrl}/api/chat/history/page`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                roomId: CHAT_CONFIG.roomId,
+                pageIndex: chatState.currentPage,
+                pageSize: chatState.pageSize
+            })
+        });
+
         const result = await response.json();
 
         // 移除加载动画
@@ -797,36 +920,75 @@ async function loadChatHistory() {
             throw new Error(result.msg || result.message || '获取聊天历史失败');
         }
 
-        // 清空消息容器
-        messagesContainer.innerHTML = '';
+        const { data } = result;
 
-        // 添加历史消息
-        const messages = result.data;
-        if (messages && messages.length > 0) {
-            // 按时间戳正序显示历史消息（最早的在上面）
-            messages.forEach(message => {
+        // 更新分页状态
+        chatState.hasMore = data.current < data.pages;
+
+        console.log(`📊 分页信息: 当前页 ${data.current}/${data.pages}, 总记录 ${data.total}, 本页记录 ${data.records.length}`);
+
+        // 处理消息数据
+        if (data.records && data.records.length > 0) {
+            // 记录当前滚动位置（用于增量加载时保持位置）
+            const scrollPos = messagesContainer.scrollTop;
+            const scrollHeight = messagesContainer.scrollHeight;
+
+            // 创建文档片段以提高性能
+            const fragment = document.createDocumentFragment();
+
+            // 添加消息到文档片段
+            data.records.forEach(message => {
                 if (message.type === 'JOIN' || message.type === 'LEAVE') {
-                    appendSystemMessage(message.message);
+                    appendSystemMessage(message, fragment);
                 } else {
-                    // 处理普通文本消息
-                    appendHistoryMessage(message);
+                    appendMessage(message, fragment);
                 }
             });
+
+            if (isInitial) {
+                // 初始加载：清空容器并添加消息
+                messagesContainer.innerHTML = '';
+                messagesContainer.appendChild(fragment);
+
+                // 如果还有更多数据，添加"加载更多"按钮
+                if (chatState.hasMore) {
+                    addLoadMoreButton();
+                }
+
+                // 滚动到底部
+                setTimeout(() => {
+                    scrollToBottom();
+                }, 100);
+            } else {
+                // 增量加载：在顶部插入新消息
+                messagesContainer.insertBefore(fragment, messagesContainer.firstChild);
+
+                // 如果还有更多数据，添加新的"加载更多"按钮
+                if (chatState.hasMore) {
+                    addLoadMoreButton();
+                } else {
+                    // 没有更多数据时显示提示
+                    addNoMoreDataTip();
+                }
+
+                // 保持滚动位置
+                messagesContainer.scrollTop = scrollPos + (messagesContainer.scrollHeight - scrollHeight);
+            }
+
+            // 更新页码
+            chatState.currentPage++;
         } else {
-            // 显示欢迎消息
-            showSystemMessage('欢迎来到聊天室！开始聊天吧~', 'info');
+            if (isInitial) {
+                // 初始加载无数据：显示欢迎消息
+                messagesContainer.innerHTML = '';
+                showSystemMessage('欢迎来到聊天室！开始聊天吧~', 'info');
+            }
         }
 
-        // 滚动到底部
-        setTimeout(() => {
-            scrollToBottom();
-        }, 100);
-
-        console.log('✅ 聊天历史加载完成，消息数:', messages ? messages.length : 0);
+        console.log('✅ 聊天历史加载完成，本次加载消息数:', data.records ? data.records.length : 0);
 
     } catch (error) {
         console.error('❌ 加载聊天历史失败:', error);
-        showSystemMessage('加载聊天历史失败: ' + error.message, 'error');
 
         // 移除加载动画（如果还存在）
         const messagesContainer = document.getElementById('messages');
@@ -836,14 +998,84 @@ async function loadChatHistory() {
                 loadingContainer.remove();
             }
         }
+
+        if (isInitial) {
+            // 初始加载失败：显示错误消息
+            showSystemMessage('加载聊天历史失败: ' + error.message, 'error');
+        } else {
+            // 增量加载失败：显示错误提示但不影响现有消息
+            showSystemMessage('加载更多消息失败: ' + error.message, 'error');
+        }
+    } finally {
+        chatState.isLoading = false;
     }
 }
 
 /**
- * 显示系统消息
+ * 添加"加载更多"按钮
  */
-function showSystemMessage(message, type = 'info') {
+function addLoadMoreButton() {
     const messagesContainer = document.getElementById('messages');
+    if (!messagesContainer) return;
+
+    // 移除现有的加载按钮（如果存在）
+    const existingBtn = messagesContainer.querySelector('.load-history-btn');
+    if (existingBtn) {
+        existingBtn.remove();
+    }
+
+    // 创建新的加载按钮
+    const loadBtn = document.createElement('button');
+    loadBtn.className = 'load-history-btn';
+    loadBtn.innerHTML = `
+        <span class="btn-icon">📜</span>
+        <span>加载更多历史消息</span>
+    `;
+    loadBtn.onclick = () => loadChatHistory(false);
+
+    // 插入到消息容器顶部
+    messagesContainer.insertBefore(loadBtn, messagesContainer.firstChild);
+
+    console.log('✅ 已添加"加载更多"按钮');
+}
+
+/**
+ * 添加"没有更多数据"提示
+ */
+function addNoMoreDataTip() {
+    const messagesContainer = document.getElementById('messages');
+    if (!messagesContainer) return;
+
+    // 移除现有的加载按钮（如果存在）
+    const existingBtn = messagesContainer.querySelector('.load-history-btn');
+    if (existingBtn) {
+        existingBtn.remove();
+    }
+
+    // 创建提示信息
+    const noMoreDiv = document.createElement('div');
+    noMoreDiv.className = 'message-container system center-message';
+    noMoreDiv.innerHTML = `
+        <div class="message">
+            <span class="status-icon">✅</span>
+            <span>没有更多历史消息了</span>
+        </div>
+    `;
+
+    // 插入到消息容器顶部
+    messagesContainer.insertBefore(noMoreDiv, messagesContainer.firstChild);
+
+    console.log('✅ 已添加"没有更多数据"提示');
+}
+
+/**
+ * 显示系统消息
+ * @param {string} message - 消息内容
+ * @param {string} type - 消息类型
+ * @param {DocumentFragment} container - 可选的容器，用于批量添加
+ */
+function showSystemMessage(message, type = 'info', container = null) {
+    const messagesContainer = container || document.getElementById('messages');
     if (!messagesContainer) return;
 
     const messageDiv = document.createElement('div');
@@ -854,64 +1086,24 @@ function showSystemMessage(message, type = 'info') {
     messageContent.textContent = message;
 
     messageDiv.appendChild(messageContent);
-    messagesContainer.appendChild(messageDiv);
 
-    scrollToBottom();
+    if (container) {
+        container.appendChild(messageDiv);
+    } else {
+        messagesContainer.appendChild(messageDiv);
+        scrollToBottom();
+    }
 
     console.log(`📢 系统消息 [${type}]:`, message);
 }
 
 /**
  * 添加消息到界面
+ * @param {Object} message - 消息对象
+ * @param {DocumentFragment} container - 可选的容器，用于批量添加
  */
-function appendMessage(message) {
-    const messagesContainer = document.getElementById('messages');
-    if (!messagesContainer) return;
-
-    const messageDiv = document.createElement('div');
-    const isOwnMessage = message.username === chatState.username;
-    messageDiv.className = `message-container ${isOwnMessage ? 'sent' : 'received'}`;
-
-    // 创建用户信息
-    const userInfoDiv = document.createElement('div');
-    userInfoDiv.className = 'user-info';
-
-    const usernameDiv = document.createElement('div');
-    usernameDiv.className = 'username';
-    usernameDiv.textContent = message.username;
-
-    const timestampDiv = document.createElement('div');
-    timestampDiv.className = 'timestamp';
-    timestampDiv.textContent = new Date(message.timestamp).toLocaleTimeString();
-
-    userInfoDiv.appendChild(usernameDiv);
-    userInfoDiv.appendChild(timestampDiv);
-
-    // 创建消息内容 - 支持多种消息类型
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message';
-
-    // 根据消息类型渲染不同内容
-    renderMessageContent(contentDiv, message);
-
-    // 组装消息
-    if (isOwnMessage) {
-        messageDiv.appendChild(contentDiv);
-        messageDiv.appendChild(userInfoDiv);
-    } else {
-        messageDiv.appendChild(userInfoDiv);
-        messageDiv.appendChild(contentDiv);
-    }
-
-    messagesContainer.appendChild(messageDiv);
-    scrollToBottom();
-}
-
-/**
- * 添加历史消息到界面（专门处理历史记录格式）
- */
-function appendHistoryMessage(message) {
-    const messagesContainer = document.getElementById('messages');
+function appendMessage(message, container = null) {
+    const messagesContainer = container || document.getElementById('messages');
     if (!messagesContainer) return;
 
     const messageDiv = document.createElement('div');
@@ -929,7 +1121,7 @@ function appendHistoryMessage(message) {
     const timestampDiv = document.createElement('div');
     timestampDiv.className = 'timestamp';
 
-    // 处理时间戳格式 - 历史消息的timestamp是毫秒数
+    // 处理时间戳格式 - 支持历史消息的毫秒时间戳
     let timeString;
     if (typeof message.timestamp === 'number') {
         // 毫秒时间戳
@@ -964,8 +1156,15 @@ function appendHistoryMessage(message) {
         messageDiv.appendChild(contentDiv);
     }
 
-    messagesContainer.appendChild(messageDiv);
+    if (container) {
+        container.appendChild(messageDiv);
+    } else {
+        messagesContainer.appendChild(messageDiv);
+        scrollToBottom();
+    }
 }
+
+
 
 /**
  * 渲染消息内容（支持文本、图片、混合类型）
@@ -1319,9 +1518,11 @@ function showImageModal(imageSrc) {
 
 /**
  * 添加系统消息到界面
+ * @param {string|Object} message - 消息内容或消息对象
+ * @param {DocumentFragment} container - 可选的容器，用于批量添加
  */
-function appendSystemMessage(message) {
-    const messagesContainer = document.getElementById('messages');
+function appendSystemMessage(message, container = null) {
+    const messagesContainer = container || document.getElementById('messages');
     if (!messagesContainer) return;
 
     const messageDiv = document.createElement('div');
@@ -1329,12 +1530,24 @@ function appendSystemMessage(message) {
 
     const messageContent = document.createElement('div');
     messageContent.className = 'message';
-    messageContent.textContent = message;
+
+    // 支持字符串消息和对象消息
+    if (typeof message === 'string') {
+        messageContent.textContent = message;
+    } else if (message && message.message) {
+        messageContent.textContent = message.message;
+    } else {
+        messageContent.textContent = '系统消息';
+    }
 
     messageDiv.appendChild(messageContent);
-    messagesContainer.appendChild(messageDiv);
 
-    scrollToBottom();
+    if (container) {
+        container.appendChild(messageDiv);
+    } else {
+        messagesContainer.appendChild(messageDiv);
+        scrollToBottom();
+    }
 }
 
 /**
@@ -1358,9 +1571,12 @@ function cleanupOnExit() {
     try {
         // 如果WebSocket已连接，先离开聊天室
         if (chatState.isConnected && chatState.stompClient && chatState.stompClient.connected) {
-            // 发送离开聊天室请求
-            fetch(`${CHAT_CONFIG.serverUrl}/api/chat/room/${CHAT_CONFIG.roomId}/leave?username=${encodeURIComponent(chatState.username)}&userId=${chatState.userId}`, {
+            // 发送离开聊天室请求 - 根据API文档，只需要传递 roomId 和 username 参数
+            fetch(`${CHAT_CONFIG.serverUrl}/api/chat/room/${CHAT_CONFIG.roomId}/leave?username=${encodeURIComponent(chatState.username)}`, {
                 method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 keepalive: true // 确保在页面卸载时也能发送请求
             }).catch(error => {
                 console.error('❌ 离开聊天室失败:', error);
@@ -1992,6 +2208,238 @@ function clearChatHistory() {
         console.error('❌ 清空聊天记录失败:', error);
         showSystemMessage('清空聊天记录失败: ' + error.message, 'error');
     }
+}
+
+/**
+ * 关闭用户名修改模态框
+ */
+function closeUsernameModal() {
+    const usernameModal = document.getElementById('username-modal');
+    if (usernameModal) {
+        usernameModal.style.display = 'none';
+        console.log('❌ 用户名修改模态框已关闭');
+    }
+}
+
+/**
+ * 确认用户名修改
+ */
+async function confirmUsernameChange() {
+    const newUsernameInput = document.getElementById('new-username');
+    const usernameConfirmBtn = document.getElementById('username-confirm-btn');
+
+    if (!newUsernameInput) {
+        console.error('❌ 用户名输入框未找到');
+        return;
+    }
+
+    const newUsername = newUsernameInput.value.trim();
+
+    // 基本验证
+    if (!newUsername) {
+        alert('用户名不能为空');
+        return;
+    }
+
+    if (newUsername === chatState.username) {
+        alert('新用户名与当前用户名相同');
+        return;
+    }
+
+    // 检查用户名长度
+    if (newUsername.length > 20) {
+        alert('用户名不能超过20个字符');
+        return;
+    }
+
+    // 检查用户名是否包含特殊字符
+    if (!/^[a-zA-Z0-9\u4e00-\u9fa5_-]+$/.test(newUsername)) {
+        alert('用户名只能包含字母、数字、中文、下划线和短横线');
+        return;
+    }
+
+    // 显示加载状态
+    if (usernameConfirmBtn) {
+        usernameConfirmBtn.disabled = true;
+        usernameConfirmBtn.textContent = '验证中...';
+    }
+
+    try {
+        console.log('🔄 开始验证用户名:', chatState.username, '->', newUsername);
+
+        // 调用服务器用户名校验接口
+        const verifyResponse = await fetch(`${CHAT_CONFIG.serverUrl}/api/chat/verify-username?username=${encodeURIComponent(newUsername)}&oldUsername=${encodeURIComponent(chatState.username)}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const verifyResult = await verifyResponse.json();
+
+        if (verifyResult.code !== 200) {
+            // 用户名校验失败
+            alert(verifyResult.msg || verifyResult.message || '用户名校验失败');
+            return;
+        }
+
+        console.log('✅ 用户名校验通过');
+
+        // 更新本地状态
+        const oldUsername = chatState.username;
+        chatState.username = newUsername;
+        localStorage.setItem('chatUsername', newUsername);
+
+        // 更新UI显示
+        updateUsernameDisplay();
+
+        // 如果已连接，发送用户名变更消息
+        if (chatState.isConnected && chatState.stompClient) {
+            try {
+                const changeMessage = {
+                    type: 'username_change',
+                    oldUsername: oldUsername,
+                    newUsername: newUsername,
+                    userId: chatState.userId,
+                    timestamp: new Date().toISOString()
+                };
+
+                chatState.stompClient.send('/app/chat/' + CHAT_CONFIG.roomId, {}, JSON.stringify(changeMessage));
+                console.log('✅ 用户名变更消息已发送');
+            } catch (error) {
+                console.error('❌ 发送用户名变更消息失败:', error);
+            }
+        }
+
+        // 关闭模态框
+        closeUsernameModal();
+
+        console.log('✅ 用户名修改完成');
+
+    } catch (error) {
+        console.error('❌ 用户名校验失败:', error);
+        alert('用户名校验失败: ' + error.message);
+    } finally {
+        // 恢复按钮状态
+        if (usernameConfirmBtn) {
+            usernameConfirmBtn.disabled = false;
+            usernameConfirmBtn.textContent = '确认';
+        }
+    }
+}
+
+/**
+ * 关闭系统消息模态框
+ */
+function closeMessageModal() {
+    const messageModal = document.getElementById('message-modal');
+    if (messageModal) {
+        messageModal.style.display = 'none';
+        console.log('❌ 系统消息模态框已关闭');
+    }
+}
+
+/**
+ * 设置用户名修改模态框事件
+ */
+function setupUsernameModalEvents() {
+    // 编辑用户名按钮
+    const editUsernameBtn = document.getElementById('edit-username-btn');
+    if (editUsernameBtn) {
+        editUsernameBtn.addEventListener('click', changeUsername);
+        console.log('✅ 用户名编辑按钮事件已绑定');
+    }
+
+    // 用户名模态框关闭按钮
+    const usernameCloseBtn = document.getElementById('username-close-btn');
+    if (usernameCloseBtn) {
+        usernameCloseBtn.addEventListener('click', closeUsernameModal);
+        console.log('✅ 用户名关闭按钮事件已绑定');
+    }
+
+    // 用户名模态框取消按钮
+    const usernameCancelBtn = document.getElementById('username-cancel-btn');
+    if (usernameCancelBtn) {
+        usernameCancelBtn.addEventListener('click', closeUsernameModal);
+        console.log('✅ 用户名取消按钮事件已绑定');
+    }
+
+    // 用户名模态框确认按钮
+    const usernameConfirmBtn = document.getElementById('username-confirm-btn');
+    if (usernameConfirmBtn) {
+        usernameConfirmBtn.addEventListener('click', confirmUsernameChange);
+        console.log('✅ 用户名确认按钮事件已绑定');
+    }
+
+    // 用户名输入框回车事件
+    const newUsernameInput = document.getElementById('new-username');
+    if (newUsernameInput) {
+        newUsernameInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                confirmUsernameChange();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closeUsernameModal();
+            }
+        });
+        console.log('✅ 用户名输入框键盘事件已绑定');
+    }
+
+    // 点击模态框背景关闭
+    const usernameModal = document.getElementById('username-modal');
+    if (usernameModal) {
+        usernameModal.addEventListener('click', function(e) {
+            if (e.target === usernameModal) {
+                closeUsernameModal();
+            }
+        });
+        console.log('✅ 用户名模态框背景点击事件已绑定');
+    }
+}
+
+/**
+ * 设置系统消息模态框事件
+ */
+function setupMessageModalEvents() {
+    // 系统消息模态框关闭按钮
+    const messageModalCloseBtn = document.getElementById('message-modal-close-btn');
+    if (messageModalCloseBtn) {
+        messageModalCloseBtn.addEventListener('click', closeMessageModal);
+        console.log('✅ 系统消息关闭按钮事件已绑定');
+    }
+
+    // 系统消息模态框确认按钮
+    const messageModalConfirmBtn = document.getElementById('message-modal-confirm-btn');
+    if (messageModalConfirmBtn) {
+        messageModalConfirmBtn.addEventListener('click', closeMessageModal);
+        console.log('✅ 系统消息确认按钮事件已绑定');
+    }
+
+    // 点击模态框背景关闭
+    const messageModal = document.getElementById('message-modal');
+    if (messageModal) {
+        messageModal.addEventListener('click', function(e) {
+            if (e.target === messageModal) {
+                closeMessageModal();
+            }
+        });
+        console.log('✅ 系统消息模态框背景点击事件已绑定');
+    }
+
+    // ESC键关闭模态框
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const messageModal = document.getElementById('message-modal');
+            const usernameModal = document.getElementById('username-modal');
+
+            if (messageModal && messageModal.style.display !== 'none') {
+                closeMessageModal();
+            } else if (usernameModal && usernameModal.style.display !== 'none') {
+                closeUsernameModal();
+            }
+        }
+    });
 }
 
 console.log('🎯 聊天室主程序加载完成，等待DOM加载...');

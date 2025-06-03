@@ -291,6 +291,26 @@
             transition: opacity 0.3s ease, transform 0.3s ease;
         }
 
+        /* 用户计数样式 */
+        .user-count {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            background: var(--accent-bg);
+            padding: 2px 6px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            transition: all 0.3s ease;
+            margin-left: 4px;
+        }
+
+        .user-count.updated {
+            background: var(--accent-green);
+            color: white;
+            transform: scale(1.05);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
         .user-list {
             list-style: none;
             padding: 0;
@@ -300,7 +320,7 @@
             scrollbar-width: thin;
             scrollbar-color: var(--border-color) transparent;
             /* 添加平滑过渡动画 - 向左滑动 */
-            max-height: 300px;
+            max-height: 100%;
             opacity: 1;
             transition: opacity 0.3s ease, transform 0.3s ease;
         }
@@ -1004,9 +1024,21 @@
 
         /* ===== 加载提示样式 ===== */
         .loading-message-container {
-            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-xl);
+            color: var(--text-secondary);
+            gap: var(--space-md);
+        }
+
+        .loading-message-container.top-loading {
             padding: var(--space-md);
-            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: var(--space-md);
+            background: var(--secondary-bg);
+            border-radius: var(--radius-md);
         }
 
         .center-message {
@@ -1020,6 +1052,29 @@
         .center-message.error {
             color: var(--accent-red);
             font-weight: 500;
+        }
+
+        /* 居中消息样式增强 */
+        .message-container.center-message {
+            align-self: center;
+            margin: var(--space-md) 0;
+        }
+
+        .message-container.center-message .message {
+            background: rgba(72, 187, 120, 0.1);
+            border: 1px solid var(--accent-green);
+            color: var(--accent-green);
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: var(--space-sm);
+            font-style: normal;
+        }
+
+        .message-container.center-message .message .status-icon {
+            font-size: 14px;
         }
 
         /* ===== 弹幕样式 ===== */
@@ -1138,13 +1193,15 @@
         .username-modal .modal-content {
             background: var(--secondary-bg);
             border: 1px solid var(--border-color);
-            padding: var(--space-xl);
+            padding: var(--space-lg);
             border-radius: var(--radius-lg);
-            width: 400px;
+            width: 320px;
             max-width: 90%;
             text-align: center;
             box-shadow: var(--shadow-lg);
             animation: slideUp 0.3s ease-out;
+            position: relative;
+            height: 14vh;
         }
 
         .username-modal h3 {
@@ -1152,20 +1209,20 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin: 0 0 var(--space-lg) 0;
-            font-size: 20px;
+            margin: 0 0 var(--space-md) 0;
+            font-size: 18px;
             font-weight: 600;
         }
 
         .username-modal input[type="text"] {
             width: 100%;
-            padding: var(--space-md);
-            margin-bottom: var(--space-lg);
+            padding: var(--space-sm) var(--space-md);
+            margin-bottom: var(--space-md);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-md);
             background: var(--tertiary-bg);
             color: var(--text-primary);
-            font-size: 16px;
+            font-size: 14px;
             outline: none;
             transition: all 0.2s ease;
             box-sizing: border-box;
@@ -1183,42 +1240,70 @@
 
         .username-modal .buttons {
             display: flex;
-            gap: var(--space-md);
+            gap: var(--space-sm);
             justify-content: center;
         }
 
         .username-modal .buttons button {
-            padding: var(--space-sm) var(--space-lg);
+            padding: var(--space-xs) var(--space-md);
             border: none;
-            border-radius: var(--radius-md);
+            border-radius: var(--radius-sm);
             cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
+            font-size: 13px;
+            font-weight: 500;
             transition: all 0.2s ease;
-            min-width: 100px;
+            min-width: 80px;
             box-shadow: var(--shadow-sm);
         }
 
         .username-modal .buttons .cancel-btn {
-            background: var(--accent-red);
-            color: white;
+            background: var(--accent-bg);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
         }
 
         .username-modal .buttons .cancel-btn:hover {
-            background: #e53e3e;
+            background: var(--accent-red);
+            color: white;
+            border-color: var(--accent-red);
             transform: translateY(-1px);
             box-shadow: var(--shadow-md);
         }
 
         .username-modal .buttons .confirm-btn {
-            background: var(--accent-green);
+            background: var(--accent-blue);
             color: white;
         }
 
         .username-modal .buttons .confirm-btn:hover {
-            background: #38a169;
+            background: #3182ce;
             transform: translateY(-1px);
             box-shadow: var(--shadow-md);
+        }
+
+        /* 用户名模态框关闭按钮 */
+        .username-modal .close-btn {
+            position: absolute;
+            top: var(--space-sm);
+            right: var(--space-sm);
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 18px;
+            cursor: pointer;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+        }
+
+        .username-modal .close-btn:hover {
+            background: var(--accent-red);
+            color: white;
+            transform: scale(1.1);
         }
 
         /* ===== 系统消息框样式 ===== */
@@ -1322,30 +1407,56 @@
 
         /* ===== 加载更多历史消息按钮样式 ===== */
         .load-history-btn {
-            background: var(--accent-bg);
-            color: var(--text-secondary);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-md);
-            padding: var(--space-sm) var(--space-md);
-            margin: var(--space-md) auto;
-            cursor: pointer;
-            transition: all 0.2s ease;
             display: flex;
             align-items: center;
-            gap: var(--space-sm);
             justify-content: center;
-            font-size: 13px;
+            gap: var(--space-sm);
+            width: 100%;
+            padding: var(--space-md);
+            margin-bottom: var(--space-md);
+            background: linear-gradient(135deg, var(--accent-bg), var(--tertiary-bg));
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 14px;
             font-weight: 500;
-            width: fit-content;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
             box-shadow: var(--shadow-sm);
         }
 
         .load-history-btn:hover:not(:disabled) {
-            background: var(--tertiary-bg);
-            color: var(--text-primary);
-            border-color: var(--border-light);
-            transform: translateY(-1px);
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
             box-shadow: var(--shadow-md);
+        }
+
+        .load-history-btn:active:not(:disabled) {
+            transform: translateY(0);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .load-history-btn .btn-icon {
+            font-size: 16px;
+            color: var(--accent-blue);
+            transition: color 0.3s ease;
+        }
+
+        .load-history-btn:hover:not(:disabled) .btn-icon {
+            color: white;
+        }
+
+        .load-history-btn .status-icon {
+            font-size: 14px;
+        }
+
+        /* 广播图标样式 */
+        .broadcast-icon {
+            font-size: 14px;
+            margin-right: var(--space-xs);
         }
 
         .load-history-btn:disabled {
@@ -1361,8 +1472,13 @@
         .loading-spinner {
             font-size: 20px;
             color: var(--accent-blue);
-            animation: spinRotate 1s linear infinite;
             margin-bottom: var(--space-sm);
+        }
+
+        .spinner-icon {
+            display: inline-block;
+            animation: spinRotate 1s linear infinite;
+            font-size: 24px;
         }
 
         @keyframes spinRotate {
@@ -1804,7 +1920,7 @@
                 </div>
                 <div class="user-info">
                     <span>当前用户: <span id="currentUsername"></span></span>
-                    <button class="edit-username-btn" onclick="changeUsername()" title="修改用户名">
+                    <button class="edit-username-btn" id="edit-username-btn" title="修改用户名">
                         ✏️
                     </button>
                 </div>
@@ -1813,7 +1929,10 @@
             <div class="chat-container">
                 <div class="chat-sidebar">
                     <h3>
-                        <span class="sidebar-title">在线用户</span>
+                        <span class="sidebar-title">
+                            在线用户
+                            <span class="user-count" id="userCount">(0)</span>
+                        </span>
                         <button class="sidebar-toggle-btn" id="userListToggle" title="收起/展开用户列表">
                             <span class="toggle-icon">◀</span>
                         </button>
@@ -1914,11 +2033,12 @@
     <!-- 用户名修改弹窗 -->
     <div id="username-modal" class="username-modal">
         <div class="modal-content">
+            <button class="close-btn" id="username-close-btn">&times;</button>
             <h3>修改用户名</h3>
             <input type="text" id="new-username" placeholder="请输入新的用户名">
             <div class="buttons">
-                <button class="cancel-btn" onclick="closeUsernameModal()">取消</button>
-                <button class="confirm-btn" onclick="confirmUsernameChange()">确认</button>
+                <button class="cancel-btn" id="username-cancel-btn">取消</button>
+                <button class="confirm-btn" id="username-confirm-btn">确认</button>
             </div>
         </div>
     </div>
@@ -1935,13 +2055,13 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="message-title">提示</h2>
-                <button class="close-btn" onclick="closeMessageModal()">&times;</button>
+                <button class="close-btn" id="message-modal-close-btn">&times;</button>
             </div>
             <div class="modal-body">
                 <p id="message-content"></p>
             </div>
             <div class="modal-footer">
-                <button class="btn save-btn" onclick="closeMessageModal()">确定</button>
+                <button class="btn save-btn" id="message-modal-confirm-btn">确定</button>
             </div>
         </div>
     </div>

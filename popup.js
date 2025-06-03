@@ -1,3 +1,19 @@
+/*
+ * Copyright 2024 改洺_ (B站UP主改洺_)
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 // 常量定义
 const STATUS_MESSAGES = {
   LOADING: '正在获取直链...',
@@ -11,7 +27,11 @@ const STORAGE_KEYS = {
   STANDARD_URL_ENABLED: 'standardUrlEnabled',
   GAME_LIST_URL_ENABLED: 'gameListUrlEnabled',
   REQUEST_DELAY: 'requestDelay', //模组间的请求间隔时间（默认5000毫秒）
-  FILE_REQUEST_DELAY: 'fileRequestDelay'//模组内文件间的请求间隔时间
+  FILE_REQUEST_DELAY: 'fileRequestDelay',//模组内文件间的请求间隔时间
+  // 版本校验相关设置
+  VERSION_CHECK_CACHE: 'versionCheckCache',
+  VERSION_CHECK_LAST_TIME: 'versionCheckLastTime',
+  VERSION_MISMATCH_NOTIFIED: 'versionMismatchNotified'
 };
 
 // 页面类型常量和提示文本常量
@@ -335,11 +355,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // 检查授权状态
   checkAuthStatus();
 
+  // 检查版本状态
+  checkVersionStatus();
+
   // 加载URL监听设置
   loadUrlSettings();
 
   // 加载高级设置
   loadAdvancedSettings();
+
+  // 加载自动投票评分设置
+  loadAutoVoteEndorseSettings();
+
+  // 加载自动投票评分统计
+  loadAutoVoteEndorseStats();
 
   // 添加URL监听开关事件监听
   document.getElementById('standardUrlSwitch').addEventListener('change', (e) => {
@@ -356,7 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 如果用户尝试开启游戏列表监听，显示风险确认对话框
     if (gameListUrlEnabled) {
-      const confirmed = confirm('提示：游戏列表监听功能已优化，将使用限流机制获取模组链接（默认单线程，间隔2.5秒），降低触发网站防护机制的风险。您可以在高级设置中调整参数。是否继续？');
+      const confirmed = confirm('提示：开启此项功能后，会监听N网游戏列表页，并自动获取mod直链，请谨慎开启，太多的请求会导致N网风控，虽然我已经做了非常非常多的优化了(大概率不会了)，但是如果还是频繁被封请关闭此项功能，或者自己挂电脑代理');
 
       // 如果用户取消，则恢复开关状态并返回
       if (!confirmed) {
@@ -383,6 +412,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileRequestDelay = parseInt(e.target.value);
     const requestDelay = parseInt(document.getElementById('requestDelay').value);
     saveAdvancedSettings(requestDelay, fileRequestDelay);
+  });
+
+  // 添加自动投票评分开关事件监听
+  document.getElementById('autoVoteSwitch').addEventListener('change', (e) => {
+    const autoVoteEnabled = e.target.checked;
+    const autoEndorseEnabled = document.getElementById('autoEndorseSwitch').checked;
+    saveAutoVoteEndorseSettings(autoVoteEnabled, autoEndorseEnabled);
+  });
+
+  document.getElementById('autoEndorseSwitch').addEventListener('change', (e) => {
+    const autoEndorseEnabled = e.target.checked;
+    const autoVoteEnabled = document.getElementById('autoVoteSwitch').checked;
+    saveAutoVoteEndorseSettings(autoVoteEnabled, autoEndorseEnabled);
+  });
+
+  // 添加刷新统计按钮事件监听
+  document.getElementById('refreshStatsBtn').addEventListener('click', () => {
+    loadAutoVoteEndorseStats();
   });
 
   // 添加清除缓存按钮的点击事件 - 优化反馈效果
@@ -513,3 +560,232 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// 版本校验相关函数
+
+/**
+ * 检查版本状态
+ * @param {boolean} forceCheck 是否强制检查
+ */
+async function checkVersionStatus(forceCheck = false) {
+  try {
+    console.log('🔍 开始版本状态检查, 强制检查:', forceCheck);
+
+    // 显示加载状态
+    updateVersionStatusDisplay(null);
+
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage({
+        action: forceCheck ? "checkVersion" : "getVersionStatus",
+        forceCheck: forceCheck
+      }, (response) => {
+        console.log('📨 收到版本检查响应:', response);
+        resolve(response);
+      });
+    });
+
+    if (response && response.success) {
+      console.log('✅ 版本检查成功:', response.versionResult);
+      updateVersionStatusDisplay(response.versionResult);
+    } else {
+      console.error('❌ 版本校验失败:', response?.error || '未知错误');
+      updateVersionStatusDisplay(null, response?.error || '版本检查失败');
+    }
+  } catch (error) {
+    console.error('💥 版本校验请求异常:', error);
+    updateVersionStatusDisplay(null, error.message);
+  }
+}
+
+/**
+ * 更新版本状态显示 - 简洁版本
+ * @param {Object} versionResult 版本校验结果
+ * @param {string} error 错误信息
+ */
+function updateVersionStatusDisplay(versionResult, error = null) {
+  const versionStatusDiv = document.getElementById('versionStatus');
+  if (!versionStatusDiv) return;
+
+  const versionTextSpan = versionStatusDiv.querySelector('.version-status-text');
+  if (!versionTextSpan) return;
+
+  if (error) {
+    // 显示错误状态
+    versionStatusDiv.className = 'version-status-compact error';
+    versionTextSpan.textContent = `❌ 版本检查失败: ${error}`;
+  } else if (!versionResult) {
+    // 显示加载状态
+    versionStatusDiv.className = 'version-status-compact loading';
+    versionTextSpan.textContent = '🔍 正在检查版本...';
+  } else if (versionResult.needsUpdate) {
+    // 显示需要更新状态
+    versionStatusDiv.className = 'version-status-compact warning';
+    versionTextSpan.innerHTML = `发现新版本 ${versionResult.currentVersion} → ${versionResult.serverVersion}`;
+
+    // 如果有更新链接，添加点击事件
+    if (versionResult.systemConfig?.sysUrl) {
+      versionTextSpan.style.cursor = 'pointer';
+      versionTextSpan.title = '点击前往更新页面';
+      versionTextSpan.onclick = () => {
+        window.open(versionResult.systemConfig.sysUrl, '_blank');
+      };
+    }
+  } else {
+    // 显示版本正常状态
+    versionStatusDiv.className = 'version-status-compact success';
+    versionTextSpan.textContent = `版本正常${versionResult.currentVersion}`;
+    versionTextSpan.style.cursor = 'default';
+    versionTextSpan.onclick = null;
+    versionTextSpan.title = '';
+  }
+
+  // 重新绑定刷新按钮点击事件
+  const checkBtn = versionStatusDiv.querySelector('#versionCheckBtn');
+  if (checkBtn) {
+    // 移除旧的事件监听器
+    checkBtn.replaceWith(checkBtn.cloneNode(true));
+    const newCheckBtn = versionStatusDiv.querySelector('#versionCheckBtn');
+
+    newCheckBtn.addEventListener('click', () => {
+      console.log('🔄 手动检查版本更新');
+      checkVersionStatus(true);
+    });
+  }
+}
+
+/**
+ * 手动检查版本更新
+ */
+function manualCheckVersion() {
+  checkVersionStatus(true);
+}
+
+// 自动投票评分相关函数
+
+// 加载自动投票评分设置
+function loadAutoVoteEndorseSettings() {
+  chrome.storage.local.get(['autoVoteEnabled', 'autoEndorseEnabled'], (result) => {
+    const autoVoteSwitch = document.getElementById('autoVoteSwitch');
+    const autoEndorseSwitch = document.getElementById('autoEndorseSwitch');
+
+    const autoVoteEnabled = result.autoVoteEnabled || false;
+    const autoEndorseEnabled = result.autoEndorseEnabled || false;
+
+    if (autoVoteSwitch) {
+      autoVoteSwitch.checked = autoVoteEnabled;
+    }
+    if (autoEndorseSwitch) {
+      autoEndorseSwitch.checked = autoEndorseEnabled;
+    }
+
+    // 更新统计区域的显示状态
+    updateAutoVoteEndorseStatsDisplay(autoVoteEnabled, autoEndorseEnabled);
+
+    console.log('自动投票评分设置已加载:', result);
+  });
+}
+
+// 保存自动投票评分设置
+function saveAutoVoteEndorseSettings(autoVoteEnabled, autoEndorseEnabled) {
+  // 保存到本地存储
+  chrome.storage.local.set({
+    autoVoteEnabled: autoVoteEnabled,
+    autoEndorseEnabled: autoEndorseEnabled
+  });
+
+  // 更新统计区域的显示状态
+  updateAutoVoteEndorseStatsDisplay(autoVoteEnabled, autoEndorseEnabled);
+
+  // 发送消息到background.js更新设置
+  chrome.runtime.sendMessage({
+    action: 'updateAutoVoteEndorseSettings',
+    autoVoteEnabled: autoVoteEnabled,
+    autoEndorseEnabled: autoEndorseEnabled
+  }, (response) => {
+    if (response && response.success) {
+      console.log('自动投票评分设置已保存');
+    } else {
+      console.error('保存自动投票评分设置失败');
+    }
+  });
+}
+
+// 更新自动投票评分统计区域的显示状态
+function updateAutoVoteEndorseStatsDisplay(autoVoteEnabled, autoEndorseEnabled) {
+  const disabledTip = document.getElementById('autoVoteEndorseDisabledTip');
+  const statsContent = document.getElementById('autoVoteEndorseStatsContent');
+
+  // 如果任一功能开启，显示统计信息；否则显示提示
+  const isAnyEnabled = autoVoteEnabled || autoEndorseEnabled;
+
+  if (disabledTip && statsContent) {
+    if (isAnyEnabled) {
+      disabledTip.style.display = 'none';
+      statsContent.style.display = 'block';
+      // 如果功能开启，加载统计数据
+      loadAutoVoteEndorseStats();
+    } else {
+      disabledTip.style.display = 'block';
+      statsContent.style.display = 'none';
+    }
+  }
+}
+
+// 加载自动投票评分统计
+function loadAutoVoteEndorseStats() {
+  // 检查功能是否开启，如果未开启则不加载统计
+  chrome.storage.local.get(['autoVoteEnabled', 'autoEndorseEnabled'], (result) => {
+    const autoVoteEnabled = result.autoVoteEnabled || false;
+    const autoEndorseEnabled = result.autoEndorseEnabled || false;
+
+    // 如果功能未开启，不加载统计
+    if (!autoVoteEnabled && !autoEndorseEnabled) {
+      console.log('自动投票评分功能未开启，跳过统计加载');
+      return;
+    }
+
+    chrome.runtime.sendMessage({
+      action: 'getAutoVoteEndorseStats'
+    }, (response) => {
+      if (response) {
+        // 更新统计显示
+        const voteSuccessCountElement = document.getElementById('voteSuccessCount');
+        const endorseSuccessCountElement = document.getElementById('endorseSuccessCount');
+        const queueLengthElement = document.getElementById('queueLength');
+        const queueReadyElement = document.getElementById('queueReady');
+        const queueDetailsElement = document.getElementById('queueDetails');
+        const waitingItemsListElement = document.getElementById('waitingItemsList');
+
+        if (voteSuccessCountElement) {
+          voteSuccessCountElement.textContent = response.voteSuccessCount || 0;
+        }
+        if (endorseSuccessCountElement) {
+          endorseSuccessCountElement.textContent = response.endorseSuccessCount || 0;
+        }
+        if (queueLengthElement) {
+          queueLengthElement.textContent = response.queueLength || 0;
+        }
+        if (queueReadyElement) {
+          queueReadyElement.textContent = response.queueReady || 0;
+        }
+
+        // 显示等待中的模组详情
+        if (queueDetailsElement && waitingItemsListElement) {
+          if (response.waitingItems && response.waitingItems.length > 0) {
+            queueDetailsElement.style.display = 'block';
+            const itemsHtml = response.waitingItems.map(item =>
+              `<div style="font-size: 10px; margin: 1px 0;">模组 ${item.gameId}/${item.modId} - 还需 ${item.minutesLeft} 分钟</div>`
+            ).join('');
+            waitingItemsListElement.innerHTML = itemsHtml;
+          } else {
+            queueDetailsElement.style.display = 'none';
+          }
+        }
+
+        console.log('自动投票评分统计已更新:', response);
+      } else {
+        console.error('获取自动投票评分统计失败');
+      }
+    });
+  });
+}

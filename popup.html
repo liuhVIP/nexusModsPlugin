@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
   <title>Nexus Mods 直链</title>
   <meta charset="UTF-8">
@@ -99,7 +100,8 @@
       box-shadow: var(--shadow-sm);
     }
 
-    .author, .version {
+    .author,
+    .version {
       font-size: 13px;
       color: var(--text-secondary);
       margin: 4px 0;
@@ -127,6 +129,7 @@
       transform: translateY(-1px);
       box-shadow: var(--shadow-md);
     }
+
     /* 状态样式 */
     #status {
       padding: 12px 16px;
@@ -290,17 +293,18 @@
       height: 16px;
       transition: all 0.3s ease;
     }
+
     /* 授权状态样式 */
     .auth-status {
-      padding: 12px 16px;
+      padding: 10px 16px;
       border-radius: var(--radius-md);
-      margin-bottom: 16px;
       font-weight: 500;
       font-size: 14px;
       display: flex;
       align-items: center;
       gap: 10px;
       transition: all 0.3s ease;
+      margin-bottom: 8px;
     }
 
     .auth-status.success {
@@ -332,14 +336,26 @@
     }
 
     @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
     }
 
     /* 脉冲动画 */
     @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+
+      0%,
+      100% {
+        opacity: 1;
+      }
+
+      50% {
+        opacity: 0.5;
+      }
     }
 
     .loading-pulse {
@@ -413,11 +429,13 @@
     }
 
     /* 现代化折叠面板样式 */
-    .tools-container, .settings-container {
+    .tools-container,
+    .settings-container {
       margin-bottom: 16px;
     }
 
-    .tools-container details, .settings-container details {
+    .tools-container details,
+    .settings-container details {
       background: var(--bg-primary);
       border-radius: var(--radius-lg);
       box-shadow: var(--shadow-md);
@@ -425,11 +443,13 @@
       transition: all 0.3s ease;
     }
 
-    .tools-container details:hover, .settings-container details:hover {
+    .tools-container details:hover,
+    .settings-container details:hover {
       box-shadow: var(--shadow-lg);
     }
 
-    .tools-container summary, .settings-container summary {
+    .tools-container summary,
+    .settings-container summary {
       padding: 16px 20px;
       cursor: pointer;
       user-select: none;
@@ -439,15 +459,18 @@
       border-radius: var(--radius-lg);
     }
 
-    .tools-container summary:hover, .settings-container summary:hover {
+    .tools-container summary:hover,
+    .settings-container summary:hover {
       background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(240, 147, 251, 0.05) 100%);
     }
 
-    .tools-container summary::-webkit-details-marker, .settings-container summary::-webkit-details-marker {
+    .tools-container summary::-webkit-details-marker,
+    .settings-container summary::-webkit-details-marker {
       display: none;
     }
 
-    .tools-container summary::before, .settings-container summary::before {
+    .tools-container summary::before,
+    .settings-container summary::before {
       content: '▶';
       margin-right: 10px;
       font-size: 12px;
@@ -455,11 +478,13 @@
       color: var(--primary-color);
     }
 
-    .tools-container details[open] summary::before, .settings-container details[open] summary::before {
+    .tools-container details[open] summary::before,
+    .settings-container details[open] summary::before {
       transform: rotate(90deg);
     }
 
-    .tools-container details[open] summary, .settings-container details[open] summary {
+    .tools-container details[open] summary,
+    .settings-container details[open] summary {
       border-bottom: 1px solid var(--border-light);
       border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     }
@@ -546,12 +571,12 @@
       box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     }
 
-    input:checked + .slider {
+    input:checked+.slider {
       background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
       box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1), 0 0 0 2px rgba(102, 126, 234, 0.2);
     }
 
-    input:checked + .slider:before {
+    input:checked+.slider:before {
       transform: translateX(22px);
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     }
@@ -633,10 +658,14 @@
     }
 
     @keyframes dot-flashing {
-      0%, 80%, 100% {
+
+      0%,
+      80%,
+      100% {
         opacity: 0.3;
         transform: scale(0.8);
       }
+
       40% {
         opacity: 1;
         transform: scale(1.2);
@@ -711,8 +740,13 @@
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
+      from {
+        opacity: 0;
+      }
+
+      to {
+        opacity: 1;
+      }
     }
 
     .fullscreen-image img {
@@ -729,6 +763,7 @@
         transform: scale(0.8);
         opacity: 0;
       }
+
       to {
         transform: scale(1);
         opacity: 1;
@@ -773,6 +808,108 @@
       transform: translateY(0);
     }
 
+    /* 简洁版本状态样式 */
+    .version-status-compact {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      margin-top: 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      transition: all 0.3s ease;
+      border: 1px solid var(--border-light);
+    }
+
+    /* 版本信息容器样式 */
+    .version-info-container {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+    }
+
+    /* 版本图标样式 */
+    .version-icon {
+      width: 16px;
+      height: 16px;
+      object-fit: contain;
+      transition: all 0.3s ease;
+      opacity: 0.8;
+    }
+
+    .version-status-compact.success .version-icon {
+      opacity: 1;
+      filter: hue-rotate(120deg) saturate(1.2);
+    }
+
+    .version-status-compact.warning .version-icon {
+      opacity: 1;
+      filter: hue-rotate(45deg) saturate(1.3);
+    }
+
+    .version-status-compact.error .version-icon {
+      opacity: 1;
+      filter: hue-rotate(0deg) saturate(1.5);
+    }
+
+    .version-status-compact.loading .version-icon {
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    .version-status-compact.success {
+      background: rgba(16, 185, 129, 0.05);
+      color: var(--success-color);
+      border-color: rgba(16, 185, 129, 0.2);
+    }
+
+    .version-status-compact.warning {
+      background: rgba(245, 158, 11, 0.05);
+      color: var(--warning-color);
+      border-color: rgba(245, 158, 11, 0.2);
+    }
+
+    .version-status-compact.error {
+      background: rgba(239, 68, 68, 0.05);
+      color: var(--error-color);
+      border-color: rgba(239, 68, 68, 0.2);
+    }
+
+    .version-status-compact.loading {
+      background: rgba(102, 126, 234, 0.05);
+      color: var(--primary-color);
+      border-color: rgba(102, 126, 234, 0.2);
+    }
+
+    .version-status-text {
+      flex: 1;
+      font-weight: 500;
+    }
+
+    .version-check-btn-compact {
+      background: none;
+      border: 1px solid currentColor;
+      color: inherit;
+      border-radius: var(--radius-sm);
+      padding: 4px 8px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      opacity: 0.7;
+      margin-left: 8px;
+    }
+
+    .version-check-btn-compact:hover {
+      opacity: 1;
+      background: currentColor;
+      color: white;
+      transform: scale(1.05);
+    }
+
+    .version-check-btn-compact:active {
+      transform: scale(0.95);
+    }
+
     /* 滚动条样式 */
     .main-container::-webkit-scrollbar {
       width: 6px;
@@ -793,6 +930,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="main-container">
     <!-- 主信息卡片 -->
@@ -804,22 +942,74 @@
           <span id="onlineCount">...</span>
         </div>
       </div>
-      <p class="author">🎯 求一键三连，谢谢支持</p>
       <p class="author">👨‍💻 作者：b站up改洺_</p>
-      <p class="version">📦 版本：v1.0.0</p>
+      <p class="author">🎯 求一键三连，支持up的创作🙏<br>🎯 插件免费！禁止倒卖！</p>
       <a href="https://space.bilibili.com/18718286?spm_id_from=333.1007.0.0" class="update-link" target="_blank">
-        🔄 获取更新
+        作者主页
       </a>
-    </div>
-        <!-- 授权状态显示 -->
-        <div id="authStatus" class="auth-status">
-          <div class="loading-spinner"></div>
-          <span>正在检查授权状态...</span>
+      <!-- 版本状态显示 -->
+      <div id="versionStatus" class="version-status-compact loading">
+        <div class="version-info-container">
+          <img src="images/officialVersion.png" alt="版本图标" class="version-icon">
+          <span class="version-status-text">正在检查版本...</span>
         </div>
+        <button class="version-check-btn-compact" id="versionCheckBtn" title="检查版本更新">🔄</button>
+      </div>
 
-        <!-- 当前状态显示 -->
-        <div id="status" class="status-loading">请访问模组详情页...</div>
-        <div id="directLink"></div>
+
+    </div>
+    <!-- 授权状态显示 -->
+    <div id="authStatus" class="auth-status">
+      <div class="loading-spinner"></div>
+      <span>正在检查授权状态...</span>
+    </div>
+
+    <!-- 当前状态显示 -->
+    <div id="status" class="status-loading">请访问模组详情页...</div>
+
+    <!-- 统计信息区域 - 根据开启状态动态显示 -->
+    <div id="autoVoteEndorseStatsContainer" class="settings-item"
+      style="border-bottom: none; background: linear-gradient(135deg, rgba(245, 158, 11, 0.02) 0%, rgba(245, 158, 11, 0.01) 100%); border-radius: var(--radius-md); margin-top: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+      <!-- 功能未开启时的提示 -->
+      <div id="autoVoteEndorseDisabledTip" style="display: none;">
+        <div style="text-align: center; padding: 12px; color: var(--text-muted);">
+          <div style="font-size: 14px; margin-bottom: 8px;">🔒 mod自动投票评分功能未开启</div>
+          <div style="font-size: 12px; line-height: 1.4;">
+            在设置中心开启"自动投票"或"自动评分"开关<br>
+            即可自动为获取直链的模组进行投票和评分，鼓励作者！<br>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;">
+            💡 根据N网的规则，获取直链20分钟后才能对模组进行投票和评分<br>
+            💡 此功能会增加一定的内存负担，如果浏览器卡顿请关闭此功能
+          </div>
+        </div>
+      </div>
+
+      <!-- 功能开启时的统计信息 -->
+      <div id="autoVoteEndorseStatsContent" style="display: none; width: 100%;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+          <div style="font-size: 12px; color: var(--text-muted); flex: 1;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span>✅ 投票成功: <span id="voteSuccessCount">0</span> 个</span>
+              <span>⭐ 评分成功: <span id="endorseSuccessCount">0</span> 个</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+              <span>⏳ 等待中: <span id="queueLength">0</span> 个</span>
+              <span>🚀 准备处理: <span id="queueReady">0</span> 个</span>
+            </div>
+            <div id="queueDetails"
+              style="font-size: 11px; color: var(--text-muted); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border-light); display: none;">
+              <div>即将处理的模组:</div>
+              <div id="waitingItemsList" style="margin-top: 2px;"></div>
+            </div>
+          </div>
+          <button id="refreshStatsBtn"
+            style="background: none; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 4px 8px; font-size: 12px; cursor: pointer; color: var(--text-secondary); margin-left: 8px;">
+            🔄
+          </button>
+        </div>
+      </div>
+    </div>
     <!-- 统一设置管理面板 -->
     <div class="settings-container">
       <details>
@@ -827,7 +1017,8 @@
         <div style="padding: 16px 0;">
           <!-- 功能设置区域 -->
           <div style="margin-bottom: 20px;">
-            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; padding-left: 4px; border-left: 3px solid var(--primary-color);">
+            <div
+              style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; padding-left: 4px; border-left: 3px solid var(--primary-color);">
               📄 功能设置
             </div>
             <div class="settings-item">
@@ -852,9 +1043,38 @@
             </div>
           </div>
 
+          <!-- 自动投票评分设置区域 -->
+          <div style="margin-bottom: 20px;">
+            <div
+              style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; padding-left: 4px; border-left: 3px solid var(--warning-color);">
+              🗳️ 自动投票评分
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">
+                <span>自动投票</span>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">获取直链20分钟后自动为模组投票</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="autoVoteSwitch">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="settings-item">
+              <div class="settings-label">
+                <span>自动评分</span>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">获取直链20分钟后自动为模组评分</div>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="autoEndorseSwitch">
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+
           <!-- 高级设置区域 -->
           <div style="margin-bottom: 20px;">
-            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; padding-left: 4px; border-left: 3px solid var(--primary-color);">
+            <div
+              style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; padding-left: 4px; border-left: 3px solid var(--primary-color);">
               🔧 高级设置
             </div>
             <div class="settings-item">
@@ -871,7 +1091,8 @@
               </div>
               <input type="number" id="fileRequestDelay" min="500" max="5000" step="100" value="2000">
             </div>
-            <div style="padding: 12px 20px; border-top: 1px solid var(--border-light); margin-top: 12px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(240, 147, 251, 0.02) 100%); border-radius: var(--radius-md);">
+            <div
+              style="padding: 12px 20px; border-top: 1px solid var(--border-light); margin-top: 12px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(240, 147, 251, 0.02) 100%); border-radius: var(--radius-md);">
               <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; text-align: center;">
                 💡 较长的间隔时间可以减少被网站拦截的风险
               </div>
@@ -884,7 +1105,8 @@
 
           <!-- 快捷键设置区域 -->
           <div>
-            <div style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; padding-left: 4px; border-left: 3px solid var(--primary-color);">
+            <div
+              style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; padding-left: 4px; border-left: 3px solid var(--primary-color);">
               ⌨️ 快捷键设置
             </div>
             <div class="settings-item" style="flex-direction: column; align-items: flex-start;">
@@ -925,14 +1147,16 @@
               <div class="tool-desc">强大的多线程下载工具，提升下载速度</div>
             </div>
           </a>
-          <button id="openAIChatBtn" class="tool-item" style="border: none; background: none; width: 100%; text-align: left;">
+          <button id="openAIChatBtn" class="tool-item"
+            style="border: none; background: none; width: 100%; text-align: left;">
             <img src="images/ai-avatar.png" alt="AI助手" class="tool-icon">
             <div class="tool-info">
               <div class="tool-name">AI助手</div>
               <div class="tool-desc">智能问答助手，随时为您解答问题</div>
             </div>
           </button>
-          <button id="openChatRoomBtn" class="tool-item" style="border: none; background: none; width: 100%; text-align: left;">
+          <button id="openChatRoomBtn" class="tool-item"
+            style="border: none; background: none; width: 100%; text-align: left;">
             <img src="images/chatRoom.png" alt="在线聊天室" class="tool-icon">
             <div class="tool-info">
               <div class="tool-name">在线聊天室</div>
@@ -967,4 +1191,5 @@
   <script src="lib/marked.min.js"></script>
   <script src="popup.js"></script>
 </body>
+
 </html>

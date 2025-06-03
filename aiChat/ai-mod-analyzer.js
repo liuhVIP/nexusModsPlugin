@@ -66,7 +66,7 @@ class AIModAnalyzer {
         this.analyzeButton.href = '#';
         this.analyzeButton.className = 'ai-analyze-button';
         this.analyzeButton.innerHTML = `
-            <span class="ai-button-icon">🤖</span>
+            <span class="ai-button-icon"><img src="${chrome.runtime.getURL('images/ai-avatar.png')}" alt="AI" /></span>
             <span class="ai-button-text">AI分析模组</span>
             <span class="ai-button-glow"></span>
         `;
@@ -253,10 +253,23 @@ class AIModAnalyzer {
                 font-size: 16px;
                 transition: transform 0.3s ease;
                 filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.3));
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .ai-analyze-button .ai-button-icon img {
+                width: 25px;
+                height: 25px;
+                filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.3));
             }
 
             .ai-analyze-button:hover .ai-button-icon {
                 animation: ai-icon-rotate 2s linear infinite;
+                filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.5));
+            }
+
+            .ai-analyze-button:hover .ai-button-icon img {
                 filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.5));
             }
 
@@ -378,6 +391,11 @@ class AIModAnalyzer {
 
                 .ai-analyze-button .ai-button-icon {
                     font-size: 14px;
+                }
+
+                .ai-analyze-button .ai-button-icon img {
+                    width: 14px;
+                    height: 14px;
                 }
             }
 

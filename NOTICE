@@ -1,0 +1,37 @@
+Nexus Mods 智能助手
+Copyright 2024 改洺_ (B站UP主改洺_)
+
+本软件包含以下第三方组件：
+
+1. jQuery v3.6.0
+   - 许可证：MIT License
+   - 版权：Copyright OpenJS Foundation and other contributors
+   - 网址：https://jquery.com/
+
+2. marked.min.js
+   - 许可证：MIT License
+   - 版权：Copyright (c) 2018+, MarkedJS
+   - 网址：https://marked.js.org/
+
+3. sockjs.min.js
+   - 许可证：MIT License
+   - 版权：Copyright (c) 2011-2012 VMware, Inc.
+   - 网址：https://github.com/sockjs/sockjs-client
+
+4. stomp.min.js
+   - 许可证：Apache License 2.0
+   - 版权：Copyright (c) 2010-2012 Jeff Mesnil
+   - 网址：https://stomp-js.github.io/
+
+本软件遵循 Apache License 2.0 开源协议。
+
+---
+
+版权声明：
+本软件的所有原创代码均由作者 改洺_ (B站UP主改洺_) 创作，受中华人民共和国著作权法和国际版权法保护。
+
+联系方式：
+- B站：改洺_
+- 项目地址：https://github.com/liuhVIP/nexusModsPlugin/tree/main?tab=readme-ov-file
+
+最后更新：2024年
