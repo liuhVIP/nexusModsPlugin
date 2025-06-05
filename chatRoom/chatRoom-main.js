@@ -7,7 +7,7 @@
 // 聊天室配置
 const CHAT_CONFIG = {
     roomId: 'MonsterHunterWilds',
-    serverUrl: 'http://117.72.89.99:7003',  // 使用本地开发服务器
+    serverUrl: 'http://117.72.89.99:7003',
     wsEndpoint: 'http://117.72.89.99:7003/ws',
     reconnectDelay: 3000,
     maxReconnectAttempts: 5

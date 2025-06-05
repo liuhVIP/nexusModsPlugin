@@ -358,6 +358,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // 检查版本状态
   checkVersionStatus();
 
+  // 初始化用户状态
+  initializeUserStatus();
+
   // 加载URL监听设置
   loadUrlSettings();
 
@@ -559,6 +562,30 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.windows.remove(sender.tab.windowId);
     }
   });
+
+  // 用户登录按钮事件
+  const openLoginBtn = document.getElementById('openLoginBtn');
+  if (openLoginBtn) {
+    openLoginBtn.addEventListener('click', () => {
+      openUserLoginWindow();
+    });
+  }
+
+  // 用户个人资料按钮事件
+  const userProfileBtn = document.getElementById('userProfileBtn');
+  if (userProfileBtn) {
+    userProfileBtn.addEventListener('click', () => {
+      showUserProfile();
+    });
+  }
+
+  // 用户登出按钮事件
+  const userLogoutBtn = document.getElementById('userLogoutBtn');
+  if (userLogoutBtn) {
+    userLogoutBtn.addEventListener('click', () => {
+      handleUserLogout();
+    });
+  }
 });
 
 // 版本校验相关函数
@@ -788,4 +815,196 @@ function loadAutoVoteEndorseStats() {
       }
     });
   });
+}
+
+// 用户管理相关函数
+
+/**
+ * 初始化用户状态
+ */
+function initializeUserStatus() {
+  updateUserStatusDisplay();
+
+  // 监听用户状态变化
+  if (window.userManager) {
+    userManager.onLogin(handleUserLoginSuccess);
+    userManager.onLogout(handleUserLogoutSuccess);
+  }
+}
+
+/**
+ * 更新用户状态显示
+ */
+function updateUserStatusDisplay() {
+  const userNotLoggedIn = document.getElementById('userNotLoggedIn');
+  const userLoggedIn = document.getElementById('userLoggedIn');
+  const userDisplayName = document.getElementById('userDisplayName');
+  const userEmail = document.getElementById('userEmail');
+  const userAvatarImg = document.getElementById('userAvatarImg');
+
+  if (!userNotLoggedIn || !userLoggedIn) return;
+
+  if (window.userManager && userManager.isUserLoggedIn()) {
+    // 已登录状态
+    const userData = userManager.getUserData();
+
+    userNotLoggedIn.style.display = 'none';
+    userLoggedIn.style.display = 'flex';
+
+    if (userDisplayName) {
+      userDisplayName.textContent = userManager.getUserDisplayName();
+    }
+
+    if (userEmail) {
+      userEmail.textContent = userManager.getUserEmail() || '未设置邮箱';
+    }
+
+    if (userAvatarImg && userData.avatarUrl) {
+      userAvatarImg.src = userData.avatarUrl;
+      userAvatarImg.onerror = () => {
+        userAvatarImg.src = 'images/user-avatar.png';
+      };
+    }
+  } else {
+    // 未登录状态
+    userNotLoggedIn.style.display = 'flex';
+    userLoggedIn.style.display = 'none';
+  }
+}
+
+/**
+ * 打开用户登录窗口
+ */
+function openUserLoginWindow() {
+  if (window.userManager) {
+    userManager.openLoginWindow();
+  } else {
+    console.error('用户管理器未初始化');
+    alert('用户管理器未初始化，请刷新页面重试');
+  }
+}
+
+/**
+ * 显示用户个人资料
+ */
+function showUserProfile() {
+  if (!window.userManager || !userManager.isUserLoggedIn()) {
+    showNotification('请先登录', 'warning');
+    return;
+  }
+
+  // 打开用户详情窗口
+  const profileWindow = userManager.openProfileWindow();
+
+  if (!profileWindow) {
+    showNotification('无法打开用户详情窗口，请检查浏览器弹窗设置', 'error');
+  }
+}
+
+/**
+ * 获取性别文本
+ */
+function getSexText(sex) {
+  switch (sex) {
+    case 0: return '男';
+    case 1: return '女';
+    case 2: return '未知';
+    default: return '未设置';
+  }
+}
+
+/**
+ * 处理用户登出
+ */
+async function handleUserLogout() {
+  if (!window.userManager || !userManager.isUserLoggedIn()) {
+    return;
+  }
+
+  const confirmed = confirm('确定要退出登录吗？');
+  if (!confirmed) return;
+
+  try {
+    await userManager.logout();
+    console.log('用户已退出登录');
+  } catch (error) {
+    console.error('退出登录失败:', error);
+    alert('退出登录失败，请重试');
+  }
+}
+
+/**
+ * 处理用户登录成功
+ */
+function handleUserLoginSuccess(userData) {
+  console.log('用户登录成功:', userData);
+  updateUserStatusDisplay();
+
+  // 显示成功提示
+  showNotification('登录成功！欢迎回来', 'success');
+}
+
+/**
+ * 处理用户登出成功
+ */
+function handleUserLogoutSuccess() {
+  console.log('用户已退出登录');
+  updateUserStatusDisplay();
+
+  // 显示提示
+  showNotification('已退出登录', 'info');
+}
+
+/**
+ * 显示通知
+ */
+function showNotification(message, type = 'info') {
+  // 创建通知元素
+  const notification = document.createElement('div');
+  notification.className = `notification notification-${type}`;
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 10000;
+    font-size: 14px;
+    font-weight: 500;
+    border-left: 4px solid ${getNotificationColor(type)};
+    transform: translateX(400px);
+    transition: transform 0.3s ease;
+  `;
+
+  notification.textContent = message;
+  document.body.appendChild(notification);
+
+  // 显示动画
+  setTimeout(() => {
+    notification.style.transform = 'translateX(0)';
+  }, 100);
+
+  // 自动隐藏
+  setTimeout(() => {
+    notification.style.transform = 'translateX(400px)';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
+}
+
+/**
+ * 获取通知颜色
+ */
+function getNotificationColor(type) {
+  switch (type) {
+    case 'success': return '#10b981';
+    case 'error': return '#ef4444';
+    case 'warning': return '#f59e0b';
+    default: return '#667eea';
+  }
 }

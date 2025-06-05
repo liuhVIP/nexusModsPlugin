@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户登录注册 - Nexus Mods 智能助手</title>
+    <link rel="stylesheet" href="user-auth.css">
+</head>
+<body>
+    <!-- 背景装饰 -->
+    <div class="background-decoration">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="auth-container">
+        <!-- 头部 -->
+        <div class="auth-header">
+            <div class="logo-section">
+                <img src="../images/officialVersion.png" alt="Logo" class="logo">
+                <h1>Nexus Mods 智能助手</h1>
+            </div>
+            <button class="close-btn" id="closeBtn" title="关闭">×</button>
+        </div>
+
+        <!-- 标签切换 -->
+        <div class="tab-container">
+            <button class="tab-btn active" data-tab="login">登录</button>
+            <button class="tab-btn" data-tab="register">注册</button>
+        </div>
+
+        <!-- 登录表单 -->
+        <div class="form-container" id="loginForm">
+            <div class="form-header">
+                <h2>欢迎回来</h2>
+                <p>登录您的账户以享受更多功能</p>
+            </div>
+
+            <!-- 登录方式切换 -->
+            <div class="login-type-switch">
+                <button class="login-type-btn active" data-type="email">邮箱登录</button>
+                <button class="login-type-btn" data-type="account">账号登录</button>
+            </div>
+
+            <form class="auth-form" id="loginFormElement">
+                <!-- 邮箱登录字段 -->
+                <div class="form-group email-login-fields">
+                    <label for="loginEmail">邮箱地址</label>
+                    <input type="email" id="loginEmail" name="email" placeholder="请输入您的邮箱地址" required>
+                    <span class="error-message" id="loginEmailError"></span>
+                </div>
+
+                <!-- 账号登录字段 -->
+                <div class="form-group account-login-fields hidden">
+                    <label for="loginAccount">账号</label>
+                    <input type="text" id="loginAccount" name="account" placeholder="请输入您的账号">
+                    <span class="error-message" id="loginAccountError"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="loginPassword">密码</label>
+                    <div class="password-input">
+                        <input type="password" id="loginPassword" name="password" placeholder="请输入您的密码" required>
+                        <button type="button" class="password-toggle" data-target="loginPassword">👁️</button>
+                    </div>
+                    <span class="error-message" id="loginPasswordError"></span>
+                </div>
+
+                <div class="form-options">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="rememberMe">
+                        <span class="checkmark"></span>
+                        记住我
+                    </label>
+                    <a href="#" class="forgot-password">忘记密码？</a>
+                </div>
+
+                <button type="submit" class="submit-btn" id="loginSubmitBtn">
+                    <span class="btn-text">登录</span>
+                    <div class="loading-spinner" style="display: none;"></div>
+                </button>
+            </form>
+        </div>
+
+        <!-- 注册表单 -->
+        <div class="form-container" id="registerForm" style="display: none;">
+            <div class="form-header">
+                <h2>创建账户</h2>
+                <p>注册新账户，开启智能助手之旅</p>
+            </div>
+
+            <form class="auth-form" id="registerFormElement">
+                <div class="form-group">
+                    <label for="registerEmail">邮箱地址</label>
+                    <input type="email" id="registerEmail" name="email" placeholder="请输入您的邮箱地址" required>
+                    <span class="error-message" id="registerEmailError"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="registerPassword">密码</label>
+                    <div class="password-input">
+                        <input type="password" id="registerPassword" name="password" placeholder="请设置您的密码（至少6位）" required>
+                        <button type="button" class="password-toggle" data-target="registerPassword">👁️</button>
+                    </div>
+                    <span class="error-message" id="registerPasswordError"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="confirmPassword">确认密码</label>
+                    <div class="password-input">
+                        <input type="password" id="confirmPassword" name="confirmPassword" placeholder="请再次输入密码" required>
+                        <button type="button" class="password-toggle" data-target="confirmPassword">👁️</button>
+                    </div>
+                    <span class="error-message" id="confirmPasswordError"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="verificationCode">邮箱验证码</label>
+                    <div class="verification-input">
+                        <input type="text" id="verificationCode" name="verificationCode" placeholder="请输入验证码" required>
+                        <button type="button" class="send-code-btn" id="sendCodeBtn">发送验证码</button>
+                    </div>
+                    <span class="error-message" id="verificationCodeError"></span>
+                </div>
+
+                <div class="form-group">
+                    <label for="userSource">用户来源</label>
+                    <select id="userSource" name="userSource" required>
+                        <option value="">请选择您的来源</option>
+                        <option value="bilibili">bilibili</option>
+                        <option value="3DM">3DM</option>
+                        <option value="朋友推荐">朋友推荐</option>
+                        <option value="自己发现">自己发现</option>
+                    </select>
+                    <span class="error-message" id="userSourceError"></span>
+                </div>
+
+                <div class="form-options">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="agreeTerms" required>
+                        <span class="checkmark"></span>
+                        我已阅读并同意<a href="#" class="terms-link">用户协议</a>和<a href="#" class="privacy-link">隐私政策</a>
+                    </label>
+                </div>
+
+                <button type="submit" class="submit-btn" id="registerSubmitBtn">
+                    <span class="btn-text">注册</span>
+                    <div class="loading-spinner" style="display: none;"></div>
+                </button>
+            </form>
+        </div>
+
+        <!-- 底部信息 -->
+        <div class="auth-footer">
+            <p>© 2024 Nexus Mods 智能助手 - 让模组管理更简单</p>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class="message-toast" id="messageToast">
+        <div class="toast-content">
+            <span class="toast-icon"></span>
+            <span class="toast-text"></span>
+        </div>
+    </div>
+
+    <script src="user-auth.js"></script>
+</body>
+</html>

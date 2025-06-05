@@ -1,0 +1,528 @@
+
+
+## 发送邮箱验证码
+
+
+**接口地址**:`/login/sendEmailCode`
+
+
+**请求方式**:`POST`
+
+
+**请求数据类型**:`application/json`
+
+
+**响应数据类型**:`*/*`
+
+
+**接口描述**:
+
+
+**请求示例**:
+
+
+```javascript
+{
+  "email": "",
+  "type": 0
+}
+```
+
+
+**请求参数**:
+
+
+**请求参数**:
+
+
+| 参数名称 | 参数说明 | 请求类型    | 是否必须 | 数据类型 | schema |
+| -------- | -------- | ----- | -------- | -------- | ------ |
+|codeSendDTO|codeSendDTO|body|true|EmailCodeSendDTO|EmailCodeSendDTO|
+|&emsp;&emsp;email|邮箱||true|string||
+|&emsp;&emsp;type|验证码类型(1:注册;2:忘记密码;3:修改邮箱)||true|integer(int32)||
+
+
+**响应状态**:
+
+
+| 状态码 | 说明 | schema |
+| -------- | -------- | ----- | 
+|200|OK|CommonResult«Void»|
+|201|Created||
+|401|Unauthorized||
+|403|Forbidden||
+|404|Not Found||
+
+
+**响应参数**:
+
+
+| 参数名称 | 参数说明 | 类型 | schema |
+| -------- | -------- | ----- |----- | 
+|code|状态码|integer(int32)|integer(int32)|
+|detail|详细描述|string||
+|msg|描述|string||
+
+
+**响应示例**:
+```javascript
+{
+	"code": 0,
+	"detail": "",
+	"msg": ""
+}
+```
+
+## 邮箱注册
+
+
+**接口地址**:`/login/emailRegister`
+
+
+**请求方式**:`POST`
+
+
+**请求数据类型**:`application/json`
+
+
+**响应数据类型**:`*/*`
+
+
+**接口描述**:
+
+
+**请求示例**:
+
+
+```javascript
+{
+  "email": "",
+  "invitationCode": "",
+  "pwd": "",
+  "userSource": "",
+  "verificationCode": ""
+}
+```
+
+
+**请求参数**:
+
+
+**请求参数**:
+
+
+| 参数名称 | 参数说明 | 请求类型    | 是否必须 | 数据类型 | schema |
+| -------- | -------- | ----- | -------- | -------- | ------ |
+|registerDTO|registerDTO|body|true|用户注册入参|用户注册入参|
+|&emsp;&emsp;email|邮箱||false|string||
+|&emsp;&emsp;invitationCode|邀请码||false|string||
+|&emsp;&emsp;pwd|密码||false|string||
+|&emsp;&emsp;userSource|用户来源||false|string||
+|&emsp;&emsp;verificationCode|验证码||false|string||
+
+
+**响应状态**:
+
+
+| 状态码 | 说明 | schema |
+| -------- | -------- | ----- | 
+|200|OK|CommonResult«登录信息»|
+|201|Created||
+|401|Unauthorized||
+|403|Forbidden||
+|404|Not Found||
+
+
+**响应参数**:
+
+
+| 参数名称 | 参数说明 | 类型 | schema |
+| -------- | -------- | ----- |----- | 
+|code|状态码|integer(int32)|integer(int32)|
+|data|数据|登录信息|登录信息|
+|&emsp;&emsp;account|账号|string||
+|&emsp;&emsp;avatarUrl|头像地址|string||
+|&emsp;&emsp;buttonList|按钮列表|array|按钮资源|
+|&emsp;&emsp;&emsp;&emsp;id|ID|string||
+|&emsp;&emsp;&emsp;&emsp;idCode|识别代码|string||
+|&emsp;&emsp;&emsp;&emsp;name|功能名称|string||
+|&emsp;&emsp;&emsp;&emsp;path|路径|string||
+|&emsp;&emsp;city|所在城市|string||
+|&emsp;&emsp;email|邮箱|string||
+|&emsp;&emsp;isClockIn|是否签到(0:否 1:是)|integer(int32)||
+|&emsp;&emsp;isUpdatePwd|是否更新默认密码(0:否 1:是)|integer(int32)||
+|&emsp;&emsp;menuList|菜单列表|array|菜单资源|
+|&emsp;&emsp;&emsp;&emsp;id|ID|string||
+|&emsp;&emsp;&emsp;&emsp;idCode|识别代码|string||
+|&emsp;&emsp;&emsp;&emsp;name|功能名称|string||
+|&emsp;&emsp;&emsp;&emsp;parentId|父ID|string||
+|&emsp;&emsp;&emsp;&emsp;path|路径|string||
+|&emsp;&emsp;nickName|用户昵称|string||
+|&emsp;&emsp;phone|手机号|string||
+|&emsp;&emsp;sex|用户性别（0男 1女 2未知）|integer(int32)||
+|&emsp;&emsp;token|token|string||
+|&emsp;&emsp;userId|用户ID|string||
+|&emsp;&emsp;userName|用户名|string||
+|detail|详细描述|string||
+|msg|描述|string||
+
+
+**响应示例**:
+```javascript
+{
+	"code": 0,
+	"data": {
+		"account": "",
+		"avatarUrl": "",
+		"buttonList": [
+			{
+				"id": "",
+				"idCode": "",
+				"name": "",
+				"path": ""
+			}
+		],
+		"city": "",
+		"email": "",
+		"isClockIn": 0,
+		"isUpdatePwd": 0,
+		"menuList": [
+			{
+				"id": "",
+				"idCode": "",
+				"name": "",
+				"parentId": "",
+				"path": ""
+			}
+		],
+		"nickName": "",
+		"phone": "",
+		"sex": 0,
+		"token": "",
+		"userId": "",
+		"userName": ""
+	},
+	"detail": "",
+	"msg": ""
+}
+```
+
+
+
+## 邮箱登录
+
+
+**接口地址**:`/login/emailLogin`
+
+
+**请求方式**:`POST`
+
+
+**请求数据类型**:`application/json`
+
+
+**响应数据类型**:`*/*`
+
+
+**接口描述**:
+
+
+**请求示例**:
+
+
+```javascript
+{
+  "email": "",
+  "pwd": ""
+}
+```
+
+
+**请求参数**:
+
+
+**请求参数**:
+
+
+| 参数名称 | 参数说明 | 请求类型    | 是否必须 | 数据类型 | schema |
+| -------- | -------- | ----- | -------- | -------- | ------ |
+|emailLoginDTO|emailLoginDTO|body|true|EmailLoginDTO|EmailLoginDTO|
+|&emsp;&emsp;email|邮箱||false|string||
+|&emsp;&emsp;pwd|密码||false|string||
+
+
+**响应状态**:
+
+
+| 状态码 | 说明 | schema |
+| -------- | -------- | ----- | 
+|200|OK|CommonResult«登录信息»|
+|201|Created||
+|401|Unauthorized||
+|403|Forbidden||
+|404|Not Found||
+
+
+**响应参数**:
+
+
+| 参数名称 | 参数说明 | 类型 | schema |
+| -------- | -------- | ----- |----- | 
+|code|状态码|integer(int32)|integer(int32)|
+|data|数据|登录信息|登录信息|
+|&emsp;&emsp;account|账号|string||
+|&emsp;&emsp;avatarUrl|头像地址|string||
+|&emsp;&emsp;buttonList|按钮列表|array|按钮资源|
+|&emsp;&emsp;&emsp;&emsp;id|ID|string||
+|&emsp;&emsp;&emsp;&emsp;idCode|识别代码|string||
+|&emsp;&emsp;&emsp;&emsp;name|功能名称|string||
+|&emsp;&emsp;&emsp;&emsp;path|路径|string||
+|&emsp;&emsp;city|所在城市|string||
+|&emsp;&emsp;email|邮箱|string||
+|&emsp;&emsp;isClockIn|是否签到(0:否 1:是)|integer(int32)||
+|&emsp;&emsp;isUpdatePwd|是否更新默认密码(0:否 1:是)|integer(int32)||
+|&emsp;&emsp;menuList|菜单列表|array|菜单资源|
+|&emsp;&emsp;&emsp;&emsp;id|ID|string||
+|&emsp;&emsp;&emsp;&emsp;idCode|识别代码|string||
+|&emsp;&emsp;&emsp;&emsp;name|功能名称|string||
+|&emsp;&emsp;&emsp;&emsp;parentId|父ID|string||
+|&emsp;&emsp;&emsp;&emsp;path|路径|string||
+|&emsp;&emsp;nickName|用户昵称|string||
+|&emsp;&emsp;phone|手机号|string||
+|&emsp;&emsp;sex|用户性别（0男 1女 2未知）|integer(int32)||
+|&emsp;&emsp;token|token|string||
+|&emsp;&emsp;userId|用户ID|string||
+|&emsp;&emsp;userName|用户名|string||
+|detail|详细描述|string||
+|msg|描述|string||
+
+
+**响应示例**:
+```javascript
+{
+	"code": 0,
+	"data": {
+		"account": "",
+		"avatarUrl": "",
+		"buttonList": [
+			{
+				"id": "",
+				"idCode": "",
+				"name": "",
+				"path": ""
+			}
+		],
+		"city": "",
+		"email": "",
+		"isClockIn": 0,
+		"isUpdatePwd": 0,
+		"menuList": [
+			{
+				"id": "",
+				"idCode": "",
+				"name": "",
+				"parentId": "",
+				"path": ""
+			}
+		],
+		"nickName": "",
+		"phone": "",
+		"sex": 0,
+		"token": "",
+		"userId": "",
+		"userName": ""
+	},
+	"detail": "",
+	"msg": ""
+}
+```
+
+
+## 账号密码登录
+
+
+**接口地址**:`/login/accountLogin`
+
+
+**请求方式**:`POST`
+
+
+**请求数据类型**:`application/json`
+
+
+**响应数据类型**:`*/*`
+
+
+**接口描述**:
+
+
+**请求示例**:
+
+
+```javascript
+{
+  "account": "",
+  "pwd": ""
+}
+```
+
+
+**请求参数**:
+
+
+**请求参数**:
+
+
+| 参数名称 | 参数说明 | 请求类型    | 是否必须 | 数据类型 | schema |
+| -------- | -------- | ----- | -------- | -------- | ------ |
+|accountLoginDTO|accountLoginDTO|body|true|用户登录入参|用户登录入参|
+|&emsp;&emsp;account|账号||false|string||
+|&emsp;&emsp;pwd|密码||false|string||
+
+
+**响应状态**:
+
+
+| 状态码 | 说明 | schema |
+| -------- | -------- | ----- | 
+|200|OK|CommonResult«登录信息»|
+|201|Created||
+|401|Unauthorized||
+|403|Forbidden||
+|404|Not Found||
+
+
+**响应参数**:
+
+
+| 参数名称 | 参数说明 | 类型 | schema |
+| -------- | -------- | ----- |----- | 
+|code|状态码|integer(int32)|integer(int32)|
+|data|数据|登录信息|登录信息|
+|&emsp;&emsp;account|账号|string||
+|&emsp;&emsp;avatarUrl|头像地址|string||
+|&emsp;&emsp;buttonList|按钮列表|array|按钮资源|
+|&emsp;&emsp;&emsp;&emsp;id|ID|string||
+|&emsp;&emsp;&emsp;&emsp;idCode|识别代码|string||
+|&emsp;&emsp;&emsp;&emsp;name|功能名称|string||
+|&emsp;&emsp;&emsp;&emsp;path|路径|string||
+|&emsp;&emsp;city|所在城市|string||
+|&emsp;&emsp;email|邮箱|string||
+|&emsp;&emsp;isClockIn|是否签到(0:否 1:是)|integer(int32)||
+|&emsp;&emsp;isUpdatePwd|是否更新默认密码(0:否 1:是)|integer(int32)||
+|&emsp;&emsp;menuList|菜单列表|array|菜单资源|
+|&emsp;&emsp;&emsp;&emsp;id|ID|string||
+|&emsp;&emsp;&emsp;&emsp;idCode|识别代码|string||
+|&emsp;&emsp;&emsp;&emsp;name|功能名称|string||
+|&emsp;&emsp;&emsp;&emsp;parentId|父ID|string||
+|&emsp;&emsp;&emsp;&emsp;path|路径|string||
+|&emsp;&emsp;nickName|用户昵称|string||
+|&emsp;&emsp;phone|手机号|string||
+|&emsp;&emsp;sex|用户性别（0男 1女 2未知）|integer(int32)||
+|&emsp;&emsp;token|token|string||
+|&emsp;&emsp;userId|用户ID|string||
+|&emsp;&emsp;userName|用户名|string||
+|detail|详细描述|string||
+|msg|描述|string||
+
+
+**响应示例**:
+```javascript
+{
+	"code": 0,
+	"data": {
+		"account": "",
+		"avatarUrl": "",
+		"buttonList": [
+			{
+				"id": "",
+				"idCode": "",
+				"name": "",
+				"path": ""
+			}
+		],
+		"city": "",
+		"email": "",
+		"isClockIn": 0,
+		"isUpdatePwd": 0,
+		"menuList": [
+			{
+				"id": "",
+				"idCode": "",
+				"name": "",
+				"parentId": "",
+				"path": ""
+			}
+		],
+		"nickName": "",
+		"phone": "",
+		"sex": 0,
+		"token": "",
+		"userId": "",
+		"userName": ""
+	},
+	"detail": "",
+	"msg": ""
+}
+```
+
+
+## 退出登录
+
+
+**接口地址**:`/login/logout`
+
+
+**请求方式**:`POST`
+
+
+**请求数据类型**:`application/json`
+
+
+**响应数据类型**:`*/*`
+
+
+**接口描述**:
+
+
+**请求参数**:
+
+
+**请求参数**:
+
+
+暂无
+
+
+**响应状态**:
+
+
+| 状态码 | 说明 | schema |
+| -------- | -------- | ----- | 
+|200|OK|CommonResult«string»|
+|201|Created||
+|401|Unauthorized||
+|403|Forbidden||
+|404|Not Found||
+
+
+**响应参数**:
+
+
+| 参数名称 | 参数说明 | 类型 | schema |
+| -------- | -------- | ----- |----- | 
+|code|状态码|integer(int32)|integer(int32)|
+|data|数据|string||
+|detail|详细描述|string||
+|msg|描述|string||
+
+
+**响应示例**:
+```javascript
+{
+	"code": 0,
+	"data": "",
+	"detail": "",
+	"msg": ""
+}
+```

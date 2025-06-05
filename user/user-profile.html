@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户详情 - Nexus Mods 智能助手</title>
+    <link rel="stylesheet" href="user-profile.css">
+</head>
+<body>
+    <!-- 背景装饰 -->
+    <div class="background-decoration">
+        <div class="gradient-orb orb-1"></div>
+        <div class="gradient-orb orb-2"></div>
+        <div class="gradient-orb orb-3"></div>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="profile-container">
+        <!-- 头部 -->
+        <div class="profile-header">
+            <div class="header-content">
+                <div class="logo-section">
+                    <img src="../images/officialVersion.png" alt="Logo" class="logo">
+                    <div class="header-text">
+                        <h1>用户详情</h1>
+                        <p>查看和编辑您的个人信息</p>
+                    </div>
+                </div>
+                <button class="close-btn" id="closeBtn" title="关闭">×</button>
+            </div>
+        </div>
+
+        <!-- 加载状态 -->
+        <div class="loading-container" id="loadingContainer">
+            <div class="loading-spinner"></div>
+            <p>正在加载用户信息...</p>
+        </div>
+
+        <!-- 错误状态 -->
+        <div class="error-container" id="errorContainer" style="display: none;">
+            <div class="error-icon">⚠️</div>
+            <h3>加载失败</h3>
+            <p id="errorMessage">无法获取用户信息，请稍后重试</p>
+            <button class="retry-btn" id="retryBtn">重试</button>
+        </div>
+
+        <!-- 用户信息内容 -->
+        <div class="profile-content" id="profileContent" style="display: none;">
+            <!-- 用户头像和基本信息 -->
+            <div class="user-info-card">
+                <div class="avatar-section">
+                    <div class="avatar-container">
+                        <img id="userAvatar" src="../images/user-avatar.png" alt="用户头像" class="user-avatar">
+                        <div class="avatar-overlay">
+                            <span>更换头像</span>
+                        </div>
+                        <div class="avatar-upload-progress" id="avatarUploadProgress" style="display: none;">
+                            <div class="upload-spinner"></div>
+                            <span>上传中...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="basic-info">
+                    <h2 id="displayUserName">用户名</h2>
+                    <p id="displayUserEmail">user@example.com</p>
+                    <div class="user-status">
+                        <span class="status-badge active">活跃用户</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 详细信息表单 -->
+            <div class="details-card">
+                <div class="card-header">
+                    <h3>详细信息</h3>
+                    <div class="action-buttons">
+                        <button class="edit-btn" id="editBtn">
+                            <span class="btn-icon">✏️</span>
+                            <span class="btn-text">编辑</span>
+                        </button>
+                        <button class="save-btn" id="saveBtn" style="display: none;">
+                            <span class="btn-icon">💾</span>
+                            <span class="btn-text">保存</span>
+                            <div class="loading-spinner" style="display: none;"></div>
+                        </button>
+                        <button class="cancel-btn" id="cancelBtn" style="display: none;">
+                            <span class="btn-icon">❌</span>
+                            <span class="btn-text">取消</span>
+                        </button>
+                    </div>
+                </div>
+
+                <form class="profile-form" id="profileForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="userName">用户名称</label>
+                            <input type="text" id="userName" name="userName" readonly>
+                            <span class="error-message" id="userNameError"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="nickName">昵称</label>
+                            <input type="text" id="nickName" name="nickName" readonly>
+                            <span class="error-message" id="nickNameError"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="account">账号</label>
+                            <input type="text" id="account" name="account" readonly>
+                            <span class="error-message" id="accountError"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="phone">手机号码</label>
+                            <input type="tel" id="phone" name="phone" readonly>
+                            <span class="error-message" id="phoneError"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="city">所在城市</label>
+                            <input type="text" id="city" name="city" readonly>
+                            <span class="error-message" id="cityError"></span>
+                        </div>
+                        <div class="form-group">
+                            <label for="sex">性别</label>
+                            <!-- 非编辑状态显示文本 -->
+                            <div class="sex-display" id="sexDisplay">未设置</div>
+                            <!-- 编辑状态显示下拉框 -->
+                            <select id="sex" name="sex" style="display: none;">
+                                <option value="">请选择</option>
+                                <option value="0">男</option>
+                                <option value="1">女</option>
+                            </select>
+                            <span class="error-message" id="sexError"></span>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="userId">用户ID</label>
+                            <input type="text" id="userId" name="userId" readonly disabled>
+                        </div>
+                        <div class="form-group">
+                            <!-- 占位，保持布局平衡 -->
+                        </div>
+                    </div>
+
+                    <!-- <div class="form-group full-width">
+                        <label for="remark">备注信息</label>
+                        <textarea id="remark" name="remark" rows="4" readonly placeholder="请输入备注信息..."></textarea>
+                        <span class="error-message" id="remarkError"></span>
+                    </div> -->
+
+                    <div class="form-group full-width">
+                        <label for="roleIds">用户角色</label>
+                        <div class="role-tags" id="roleTags">
+                            <!-- 角色标签将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 账户安全 -->
+            <div class="security-card">
+                <div class="card-header">
+                    <h3>账户安全</h3>
+                </div>
+                <div class="security-items">
+                    <div class="security-item">
+                        <div class="security-info">
+                            <div class="security-icon">🔒</div>
+                            <div class="security-text">
+                                <h4>修改密码</h4>
+                                <p>定期更换密码以保护账户安全</p>
+                            </div>
+                        </div>
+                        <button class="security-btn" id="changePasswordBtn">修改</button>
+                    </div>
+                    <div class="security-item">
+                        <div class="security-info">
+                            <div class="security-icon">📧</div>
+                            <div class="security-text">
+                                <h4>邮箱验证</h4>
+                                <p>验证邮箱以确保账户安全</p>
+                            </div>
+                        </div>
+                        <button class="security-btn verified" disabled>已验证</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改密码模态框 -->
+    <div class="modal-overlay" id="passwordModal" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>修改密码</h3>
+                <button class="modal-close-btn" id="passwordModalCloseBtn">×</button>
+            </div>
+            <div class="modal-content">
+                <form class="password-form" id="passwordForm">
+                    <div class="form-group">
+                        <label for="currentPassword">当前密码</label>
+                        <div class="password-input">
+                            <input type="password" id="currentPassword" name="currentPassword" placeholder="请输入当前密码" required>
+                            <button type="button" class="password-toggle" data-target="currentPassword">👁️</button>
+                        </div>
+                        <span class="error-message" id="currentPasswordError"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newPassword">新密码</label>
+                        <div class="password-input">
+                            <input type="password" id="newPassword" name="newPassword" placeholder="请输入新密码（至少6位）" required>
+                            <button type="button" class="password-toggle" data-target="newPassword">👁️</button>
+                        </div>
+                        <span class="error-message" id="newPasswordError"></span>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="confirmNewPassword">确认新密码</label>
+                        <div class="password-input">
+                            <input type="password" id="confirmNewPassword" name="confirmNewPassword" placeholder="请再次输入新密码" required>
+                            <button type="button" class="password-toggle" data-target="confirmNewPassword">👁️</button>
+                        </div>
+                        <span class="error-message" id="confirmNewPasswordError"></span>
+                    </div>
+
+                    <div class="password-tips">
+                        <h4>密码要求：</h4>
+                        <ul>
+                            <li>至少6个字符</li>
+                            <li>建议包含字母和数字</li>
+                            <li>避免使用过于简单的密码</li>
+                        </ul>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="cancel-btn" id="passwordCancelBtn">取消</button>
+                <button type="submit" class="submit-btn" id="passwordSubmitBtn" form="passwordForm">
+                    <span class="btn-text">确认修改</span>
+                    <div class="loading-spinner" style="display: none;"></div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 消息提示 -->
+    <div class="message-toast" id="messageToast">
+        <div class="toast-content">
+            <span class="toast-icon"></span>
+            <span class="toast-text"></span>
+        </div>
+    </div>
+
+    <script src="user-profile.js"></script>
+</body>
+</html>

@@ -928,6 +928,126 @@
     .main-container::-webkit-scrollbar-thumb:hover {
       background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-color) 100%);
     }
+
+    /* 用户中心样式 */
+    .user-center-content {
+      padding: 16px 0;
+    }
+
+    .user-status-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(240, 147, 251, 0.05) 100%);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-light);
+      transition: var(--transition-fast);
+    }
+
+    .user-status-card:hover {
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(240, 147, 251, 0.08) 100%);
+      border-color: var(--border-color);
+    }
+
+    .user-status-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+    }
+
+    .user-status-icon {
+      font-size: 24px;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+      border-radius: 50%;
+      color: white;
+    }
+
+    .user-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      overflow: hidden;
+      border: 2px solid var(--border-color);
+    }
+
+    .user-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .user-status-text {
+      flex: 1;
+    }
+
+    .user-status-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+    }
+
+    .user-status-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .user-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .user-action-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: var(--transition-fast);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .login-btn {
+      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-light) 100%);
+      color: white;
+      padding: 10px 20px;
+    }
+
+    .login-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .profile-btn {
+      background: var(--bg-secondary);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+    }
+
+    .profile-btn:hover {
+      background: var(--bg-tertiary);
+      color: var(--text-primary);
+    }
+
+    .logout-btn {
+      background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+      color: white;
+    }
+
+    .logout-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
   </style>
 </head>
 
@@ -943,7 +1063,7 @@
         </div>
       </div>
       <p class="author">👨‍💻 作者：b站up改洺_</p>
-      <p class="author">🎯 求一键三连，支持up的创作🙏<br>🎯 插件免费！禁止倒卖！</p>
+      <p class="author">🎯 求一键三连，支持up的创作🙏</p>
       <a href="https://space.bilibili.com/18718286?spm_id_from=333.1007.0.0" class="update-link" target="_blank">
         作者主页
       </a>
@@ -1128,6 +1248,49 @@
       </details>
     </div>
 
+    <!-- 用户中心部分 -->
+    <div class="tools-container">
+      <details>
+        <summary>👤 用户中心</summary>
+        <div class="user-center-content">
+          <!-- 未登录状态 -->
+          <div id="userNotLoggedIn" class="user-status-card">
+            <div class="user-status-info">
+              <div class="user-status-icon">🔐</div>
+              <div class="user-status-text">
+                <div class="user-status-title">未登录</div>
+                <div class="user-status-desc">登录后享受更多功能</div>
+              </div>
+            </div>
+            <button id="openLoginBtn" class="user-action-btn login-btn">
+              <span>登录 / 注册</span>
+            </button>
+          </div>
+
+          <!-- 已登录状态 -->
+          <div id="userLoggedIn" class="user-status-card" style="display: none;">
+            <div class="user-status-info">
+              <div class="user-avatar">
+                <img id="userAvatarImg" src="images/user-avatar.png" alt="用户头像">
+              </div>
+              <div class="user-status-text">
+                <div class="user-status-title" id="userDisplayName">用户名</div>
+                <div class="user-status-desc" id="userEmail">user@example.com</div>
+              </div>
+            </div>
+            <div class="user-actions">
+              <button id="userProfileBtn" class="user-action-btn profile-btn" title="个人资料">
+                👤
+              </button>
+              <button id="userLogoutBtn" class="user-action-btn logout-btn" title="退出登录">
+                🚪
+              </button>
+            </div>
+          </div>
+        </div>
+      </details>
+    </div>
+
     <!-- 推荐工具部分 -->
     <div class="tools-container">
       <details>
@@ -1189,6 +1352,7 @@
   </div>
 
   <script src="lib/marked.min.js"></script>
+  <script src="user/user-manager.js"></script>
   <script src="popup.js"></script>
 </body>
 

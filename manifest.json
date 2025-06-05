@@ -19,7 +19,9 @@
     "https://www.nexusmods.com/*",
     "https://users.nexusmods.com/*",
     "http://117.72.89.99:7003/*",
-    "ws://117.72.89.99:7003/*"
+    "ws://117.72.89.99:7003/*",
+    "http://127.0.0.1:7003/*",
+    "ws://127.0.0.1:7003/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -65,7 +67,8 @@
         "unified-chat.html",
         "unified-chat.js",
         "chatroom/*",
-        "aiChat/*"
+        "aiChat/*",
+        "user/*"
       ],
       "matches": ["https://www.nexusmods.com/*"]
     }
