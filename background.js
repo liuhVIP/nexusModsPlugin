@@ -1178,6 +1178,7 @@ async function getAllDownloadUrls(modId, gameName, cookies, isGameListPage = fal
 
         const downloadUrls = [];
         for (const fileId of fileIds) {
+            console.log("解析直链开始", fileId);
             try {
                 // 如果设置了文件延迟，在这里等待
                 if (fileDelay > 0) {
@@ -1197,7 +1198,8 @@ async function getAllDownloadUrls(modId, gameName, cookies, isGameListPage = fal
                     },
                     body: data
                 });
-
+                
+                console.log('downloadResponse', downloadResponse);
                 if (!downloadResponse.ok) {
                     console.error(`获取文件 ${fileId} 的下载链接失败: ${downloadResponse.status}`);
                     continue;
@@ -1294,6 +1296,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     // 使用动态获取的 cookies
     getNexusCookies().then(cookies => {
+      console.log("获取到cookies", cookies);
       const cookieString = formatCookies(cookies);
       getAllDownloadUrls(modId, gameName, cookieString, isGameListPage)
         .then(downloadUrls => {

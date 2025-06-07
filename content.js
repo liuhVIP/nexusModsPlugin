@@ -416,6 +416,8 @@ function getDirectLinksFromCache(gameName, modId) {
 
 // 保存直链到缓存
 function saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl, loadingTime = null) {
+  console.log("saveDirectLinksToCache", "我进来了");
+  console.log("downloadUrls", downloadUrls);
   const cacheKey = getCacheKey(gameName, modId);
   parsedLinksCache.set(cacheKey, {
     downloadUrls,
@@ -874,10 +876,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         modId: modInfo.modId,
         gameName: modInfo.gameName
       }, (response) => {
-        if (response.success && response.downloadUrls) {
+        if (response.success && response.downloadUrls.length > 0) {
           sendResponse({ downloadUrls: response.downloadUrls });
         } else {
-          sendResponse({ error: response.error || "获取下载链接失败" });
+          console.log("到这里来了1");
+          sendResponse({ error: response.error || "无法获取到N网授权，请先登录N网账号！" });
         }
       });
       return true; // 表示异步响应
@@ -942,10 +945,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // console.log(`成功找到模组 ${modId} 的元素，开始更新直链`);
         // 获取加载时间
         const loadingTime = getLoadingTime(modId);
-        // 保存到缓存（包含加载时间）
-        saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl, loadingTime);
-        // 显示直链时传递加载时间
-        displayDirectLinksInModTile(targetMod.element, downloadUrls, fullUrl, loadingTime);
+
+        // 检查 downloadUrls 是否为空
+        if (!downloadUrls || downloadUrls.length === 0) {
+          console.log(`模组 ${modId} 的下载链接为空，显示错误信息`);
+          // 获取直链失败，清除授权缓存
+          chrome.runtime.sendMessage({ action: "clearAuthStatus" });
+          // 显示错误信息而不是保存空的缓存
+          displayErrorInModTile(targetMod.element, "无法获取到N网授权，请先登录N网账号！");
+        } else {
+          // 保存到缓存（包含加载时间）
+          saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl, loadingTime);
+          // 显示直链时传递加载时间
+          displayDirectLinksInModTile(targetMod.element, downloadUrls, fullUrl, loadingTime);
+        }
 
         // 更新进度计数器 - 使用新的统一方法，添加防重复检查
         if (!globalCounters.completedModIds.has(gameName)) {
@@ -974,7 +987,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         console.error(`多次重试后仍未找到模组 ${modId} 的元素`);
         // 即使找不到元素，也要保存到缓存和更新计数器（包含加载时间）
         const loadingTime = getLoadingTime(modId);
-        saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl, loadingTime);
+
+        // 检查 downloadUrls 是否为空，只有非空时才保存到缓存
+        if (downloadUrls && downloadUrls.length > 0) {
+          saveDirectLinksToCache(gameName, modId, downloadUrls, fullUrl, loadingTime);
+        } else {
+          console.log(`模组 ${modId} 的下载链接为空，不保存到缓存`);
+        }
+
         if (!globalCounters.completedModIds.has(gameName)) {
           globalCounters.completedModIds.set(gameName, new Set());
         }
@@ -1186,11 +1206,12 @@ async function handleModUrlDetected(modInfo) {
     // 检查缓存中是否已有该模组的直链
     const cachedData = getDirectLinksFromCache(modInfo.gameName, modInfo.modId);
     if (cachedData) {
-      // console.log('从缓存中获取到直链');
-      displayAllDirectLinks(cachedData.downloadUrls);
-      return;
+      if (cachedData.downloadUrls.length > 0) {
+        // console.log('从缓存中获取到直链');
+        displayAllDirectLinks(cachedData.downloadUrls);
+        return;
+      }
     }
-
     // 发送消息给background.js获取所有下载链接
     chrome.runtime.sendMessage({
       action: "getAllDownloadUrls",
@@ -1198,21 +1219,22 @@ async function handleModUrlDetected(modInfo) {
       gameName: modInfo.gameName,
       isGameListPage: false // 标准模组页面
     }, (response) => {
-      if (response.success && response.downloadUrls) {
+      if (response.success && response.downloadUrls.length > 0) {
         // 保存到缓存（标准页面没有加载时间跟踪）
         const fullUrl = `https://www.nexusmods.com/${modInfo.gameName}/mods/${modInfo.modId}?tab=files`;
         saveDirectLinksToCache(modInfo.gameName, modInfo.modId, response.downloadUrls, fullUrl, null);
         displayAllDirectLinks(response.downloadUrls);
       } else {
+        console.log("到这里来了2");
         // 获取直链失败，清除授权缓存
         chrome.runtime.sendMessage({ action: "clearAuthStatus" });
-        displayDirectLinkError(response.error || "获取下载链接失败");
+        displayModPageError(response.error || "无法获取到N网授权，请先登录N网账号！");
       }
     });
   } catch (error) {
     // 发生错误时也清除授权缓存
     chrome.runtime.sendMessage({ action: "clearAuthStatus" });
-    displayDirectLinkError(error.message);
+    displayModPageError(error.message);
   }
 }
 
@@ -1378,10 +1400,16 @@ function handleGameListPage(gameName) {
           // 检查缓存中是否已有该模组的直链
           const cacheKey = getCacheKey(gameName, modData.modId);
           if (parsedLinksCache.has(cacheKey)) {
-            // 如果缓存中有，直接显示缓存的直链
+            // 如果缓存中有，检查直链是否有效
             const cachedData = parsedLinksCache.get(cacheKey);
-            // console.log(`显示模组 ${modData.modId} 的缓存直链${cachedData.loadingTime ? `，加载时间: ${cachedData.loadingTime}ms` : ''}`);
-            displayDirectLinksInModTile(modData.element, cachedData.downloadUrls, cachedData.fullUrl, cachedData.loadingTime);
+            if (cachedData.downloadUrls && cachedData.downloadUrls.length > 0) {
+              // console.log(`显示模组 ${modData.modId} 的缓存直链${cachedData.loadingTime ? `，加载时间: ${cachedData.loadingTime}ms` : ''}`);
+              displayDirectLinksInModTile(modData.element, cachedData.downloadUrls, cachedData.fullUrl, cachedData.loadingTime);
+            } else {
+              // 如果缓存中的直链为空，显示错误状态
+              console.log(`模组 ${modData.modId} 缓存中的直链为空，显示错误状态`);
+              displayErrorInModTile(modData.element, "未找到可用的下载链接");
+            }
           } else {
             // 如果缓存中没有，显示加载状态
             // console.log(`显示模组 ${modData.modId} 的加载状态`);
@@ -2233,6 +2261,127 @@ function displayDirectLinkError(message, fileId) {
   fileElement.parentNode.insertBefore(container, fileElement.nextSibling);
 }
 
+/**
+ * 为所有文件元素显示错误信息（用于标准模组页面）
+ * @param {string} message 错误信息
+ */
+function displayDirectLinkErrorForAllFiles(message) {
+  // 获取所有文件元素
+  const fileElements = document.querySelectorAll('[data-id]');
+
+  if (fileElements.length === 0) {
+    console.log('未找到文件元素，无法显示错误信息');
+    return;
+  }
+
+  // 为每个文件元素显示错误信息
+  fileElements.forEach(fileElement => {
+    const fileId = fileElement.dataset.id;
+    if (fileId) {
+      // 移除已存在的容器（包括加载状态容器）
+      const existingContainer = fileElement.parentNode.querySelector(`.${CONTAINER_CLASS}`);
+      if (existingContainer) {
+        existingContainer.remove();
+      }
+
+      const container = document.createElement('div');
+      container.className = CONTAINER_CLASS;
+      container.style.cssText = STYLES.CONTAINER;
+
+      const errorContent = document.createElement('div');
+      errorContent.style.cssText = STYLES.CONTAINER_ERROR;
+
+      // 添加错误图标
+      const errorIcon = document.createElement('span');
+      errorIcon.textContent = '⚠️';
+      errorIcon.style.cssText = 'font-size: 14px; flex-shrink: 0;';
+      errorContent.appendChild(errorIcon);
+
+      // 添加错误文本
+      const errorText = document.createElement('span');
+      errorText.textContent = message;
+      errorText.style.cssText = 'font-weight: 500;';
+      errorContent.appendChild(errorText);
+
+      container.appendChild(errorContent);
+
+      // 插入到文件元素后面
+      fileElement.parentNode.insertBefore(container, fileElement.nextSibling);
+    }
+  });
+}
+
+/**
+ * 在模组页面显示错误信息（用于单个模组页面，不是文件页面）
+ * @param {string} message 错误信息
+ */
+function displayModPageError(message) {
+  // 在页面顶部显示错误提示
+  const existingError = document.querySelector('.nexus-mod-error-container');
+  if (existingError) {
+    existingError.remove();
+  }
+
+  const errorContainer = document.createElement('div');
+  errorContainer.className = 'nexus-mod-error-container';
+  errorContainer.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fee2e2;
+    color: #dc2626;
+    padding: 12px 24px;
+    border-radius: 8px;
+    z-index: 9999;
+    font-size: 14px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid #fecaca;
+    max-width: 500px;
+    text-align: center;
+  `;
+
+  // 添加错误图标
+  const errorIcon = document.createElement('span');
+  errorIcon.textContent = '⚠️';
+  errorIcon.style.cssText = 'font-size: 16px; flex-shrink: 0;';
+  errorContainer.appendChild(errorIcon);
+
+  // 添加错误文本
+  const errorText = document.createElement('span');
+  errorText.textContent = message;
+  errorContainer.appendChild(errorText);
+
+  // 添加关闭按钮
+  const closeButton = document.createElement('button');
+  closeButton.textContent = '×';
+  closeButton.style.cssText = `
+    background: none;
+    border: none;
+    color: #dc2626;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 8px;
+    line-height: 1;
+  `;
+  closeButton.onclick = () => errorContainer.remove();
+  errorContainer.appendChild(closeButton);
+
+  document.body.appendChild(errorContainer);
+
+  // 3秒后自动消失
+  setTimeout(() => {
+    if (errorContainer.parentNode) {
+      errorContainer.remove();
+    }
+  }, 3000);
+}
+
 // 添加GraphQL请求监听
 let isProcessing = false;
 
@@ -2552,9 +2701,12 @@ function handleControlPanelTable() {
       // 检查缓存中是否已有该模组的直链
       const cachedData = getDirectLinksFromCache(modInfo.gameName, modInfo.modId);
       if (cachedData) {
-        console.log('从缓存中获取到直链');
-        displayAllDirectLinks(cachedData.downloadUrls);
-        return;
+        if (cachedData.downloadUrls && cachedData.downloadUrls.length > 0) {
+          console.log('从缓存中获取到直链');
+          console.log("cachedData", cachedData);
+          displayAllDirectLinks(cachedData.downloadUrls);
+          return;
+        }
       }
 
       // 如果没有缓存，显示加载状态
@@ -2571,22 +2723,25 @@ function handleControlPanelTable() {
         gameName: modInfo.gameName,
         isGameListPage: false // 标准模组页面
       }, (response) => {
-        if (response.success && response.downloadUrls) {
+        if (response.success && response.downloadUrls.length > 0) {
           // 保存到缓存（标准页面没有加载时间跟踪）
           const fullUrl = `https://www.nexusmods.com/${modInfo.gameName}/mods/${modInfo.modId}?tab=files`;
           saveDirectLinksToCache(modInfo.gameName, modInfo.modId, response.downloadUrls, fullUrl, null);
           displayAllDirectLinks(response.downloadUrls);
         } else {
+          console.log("到这里来了3");
           // 获取直链失败，清除授权缓存
           chrome.runtime.sendMessage({ action: "clearAuthStatus" });
-          displayDirectLinkError(response.error || "获取下载链接失败");
+          // 为所有文件元素显示错误信息
+          displayDirectLinkErrorForAllFiles(response.error || "无法获取到N网授权，请先登录N网账号！");
         }
       });
     } catch (error) {
       console.error('处理直链时出错:', error);
       // 发生错误时也清除授权缓存
       chrome.runtime.sendMessage({ action: "clearAuthStatus" });
-      displayDirectLinkError(error.message);
+      // 为所有文件元素显示错误信息
+      displayDirectLinkErrorForAllFiles(error.message);
     }
   };
 
